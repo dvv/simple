@@ -6,7 +6,7 @@
 
 fs = require 'fs'
 http = require 'http'
-lookupMimeType = require('mime').lookup
+lookupMimeType = require('mime') 'application/octet-stream'
 
 http.ServerResponse::send = (body, headers, status) ->
 
@@ -73,7 +73,9 @@ http.ServerResponse::send = (body, headers, status) ->
 						@headers['content-range'] = 'items=' + body.start + '-' + body.end + '/' + body.totalCount
 					#console.log body
 					body = JSON.stringify body
-					# TODO: func(data) if ?callback=func
+					# JSONP?
+					if @req.query?.callback
+						body = @req.query.callback.replace(/[^\w$.]/g, '') + '(' + body + ');'
 				catch err
 					console.log err
 					body = 'HZ' #sys.inspect body
@@ -89,8 +91,7 @@ http.ServerResponse::send = (body, headers, status) ->
 		@headers['content-length'] = (if body instanceof Buffer then body.length else Buffer.byteLength body) unless @headers['content-length']
 
 	# merge headers passed
-	for k, v of headers
-		@headers[k] = v
+	@headers[k] = v for k, v of headers
 
 	# respond
 	@writeHead status or 200, @headers
@@ -103,20 +104,6 @@ http.ServerResponse::contentType = (type) ->
 http.ServerResponse::redirect = (url, status) ->
 	@send '', {location: url}, status or 302
 
-# TODO: make use of node-static!
-http.ServerResponse::sendfile = (file) ->
-	self = this
-	fs.readFile file, (err, buf) ->
-		#dir 'FS', file, err
-		if err
-			self.send (if err.errno is process.ENOENT or err.errno is process.EISDIR then 404 else 500)
-		else
-			self.contentType file
-			self.send buf
-
 http.ServerResponse::attachment = (filename) ->
 	@headers['content-disposition'] = if filename then 'attachment; filename="' + path.basename(filename) + '"' else 'attachment'
-	this
-
-http.ServerResponse::download = (file, filename) ->
-	@attachment(filename or file).sendfile file
+	@

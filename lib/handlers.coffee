@@ -20,6 +20,9 @@ module.exports.static = (options) ->
 		# parse the request, leave body alone
 		req.parse()
 
+		# attach request to response
+		res.req = req
+
 		# serve files
 		# no static file? -> none of our business
 		if req.method is 'GET'
@@ -141,6 +144,7 @@ module.exports.authCookie = (options) ->
 				# define session persistence method
 				#
 				# FIXME: efficiency?! this creates a closure for each request!
+				# TODO: use res.req in res.send!
 				#
 				#
 				req.remember = (session) ->
@@ -207,7 +211,7 @@ module.exports.jsonrpc = (options) ->
 				data.method = 'get'
 				data.params = [parts[1]]
 			else
-				data.method = 'all'
+				data.method = 'query'
 				data.params = [query]
 			method = 'POST'
 		if method is 'POST'

@@ -39,7 +39,7 @@ module.exports = (handler, options) ->
 		comm.on 'data', (message) ->
 			# get config from master
 			data = JSON.parse message
-			Object.defineProperty data, 'wid', value: node.id, enumerable: true
+			Object.defineProperty data, 'wid', value: node.id
 		comm.on 'fd', (fd) ->
 			server.listenFD fd, 'tcp4'
 			console.log "WORKER #{node.id} started"
