@@ -11,7 +11,9 @@ module.exports.nop = () -> (req, res, next) -> next()
 #
 module.exports.static = (options) ->
 
-	static = new (require('static/node-static').Server)( options.dir, cache: options.ttl )
+	options ?= {}
+
+	static = new (require('static/node-static').Server)( options.dir or 'public', cache: options.ttl or 3600 )
 
 	handler = (req, res, next) ->
 
@@ -31,12 +33,68 @@ module.exports.static = (options) ->
 #
 module.exports.body = (options) ->
 
+	options ?= {}
+
+	formidable = require 'formidable'
+
 	handler = (req, res, next) ->
 
 		if req.method is 'POST' or req.method is 'PUT'
-			req.parseBody (err) ->
-				return next err if err
+			console.log 'DESER'
+			req.params = {} # N.B. drop any parameter got from querystring
+			# deserialize
+			form = new formidable.IncomingForm()
+			form.uploadDir = options.uploadDir or 'upload'
+			form.on 'file', (field, file) ->
+				form.emit 'field', field, file
+			form.on 'field', (field, value) ->
+				console.log 'FIELD', field, value
+				if not req.params[field]
+					req.params[field] = value
+				else if not Array.isArray req.params[field]
+					req.params[field] = [req.params[field], value]
+				else
+					req.params[field].push value
+			form.on 'error', (err) ->
+				console.log 'TYPE?', err
+				next SyntaxError(err.message or err)
+			form.on 'end', () ->
+				console.log 'END'
+				# Backbone.emulateJSON compat:
+				# if 'application/x-www-form-urlencoded[; foobar]' --> reparse 'model' key to be the final params
+				if req.headers['content-type'].split(';')[0] is 'application/x-www-form-urlencoded'
+					delete req.params._method
+					#console.log 'BACKBONE?', req.params
+					req.params = JSON.parse(req.params.model or '{}')
 				next()
+			form.parse req
+		else
+			next()
+
+#
+# decode request JSON body
+#
+module.exports.jsonBody = (options) ->
+
+	options ?= {}
+
+	(req, res, next) ->
+
+		if (req.method is 'POST' or req.method is 'PUT') and req.headers['content-type'].split(';')[0] is 'application/json'
+			req.params = {}
+			body = ''
+			req.on 'data', (chunk) ->
+				body += chunk.toString 'utf8'
+				# fuser not to exhaust memory
+				if body.length > options.maxLength > 0
+					next TypeError 'Max length exceeded'
+			req.on 'end', () ->
+				try
+					# TODO: use kriszyp's one?
+					req.params = JSON.parse body
+					next()
+				catch x
+					next SyntaxError x.message
 		else
 			next()
 
@@ -63,19 +121,21 @@ module.exports.logResponse = (options) ->
 #
 module.exports.authCookie = (options) ->
 
+	options ?= {}
+
 	require('cookie').secret = options.secret
 	cookie = options.cookie or 'uid'
-	getUser = options.getUser
+	getContext = options.getContext
 
-	if getUser
+	if getContext
 		(req, res, next) ->
 			# get the user
 			uid = req.getSecureCookie cookie
 			#console.log "UID #{uid}"
-			getUser uid, (err, user) ->
+			getContext uid, (err, context) ->
 				# N.B. any error in getting user just means no user
-				req.user = user or {}
-				#console.log "USER", user
+				req.context = context or user: {}
+				#console.log "USER", req.context.user
 				#
 				#
 				# define session persistence method
@@ -91,14 +151,14 @@ module.exports.authCookie = (options) ->
 						cookieOptions.expires = session.expires if session.expires
 						res.setSecureCookie cookie, session.uid, cookieOptions
 					else
-						req.user = {}
+						req.context = user: {}
 						#console.log 'SESSKILL'
 						res.clearCookie cookie, cookieOptions
 				next()
 	else
 		(req, res, next) ->
 			# fake user
-			req.user = {}
+			req.context = user: {}
 			next()
 
 #
@@ -109,6 +169,8 @@ module.exports.authCookie = (options) ->
 # TODO: document!
 #
 module.exports.jsonrpc = (options) ->
+
+	options ?= {}
 
 	# TODO: here require RQL.parseQuery
 	# TODO: require json-rpc.handle
@@ -128,7 +190,7 @@ module.exports.jsonrpc = (options) ->
 		method = req.method
 		parts = req.location.pathname.substring(1).split '/'
 		data = req.params
-		context = req.user.context
+		context = req.context
 		#
 		# translate GET into fake RPC call
 		#
@@ -137,7 +199,7 @@ module.exports.jsonrpc = (options) ->
 			# GET /Foo?query --> POST /Foo {method: 'all', params: [query]}
 			# GET /Foo/ID?query --> POST /Foo {method: 'get', params: [ID]}
 			#
-			# FIXME: parts should be decodeURIComponent'ed
+			# N.B. parts are decodeURIComponent'ed in U.drill
 			data =
 				jsonrpc: '2.0'
 				id: 1
@@ -160,11 +222,11 @@ module.exports.jsonrpc = (options) ->
 				args = if Array.isArray data.params then data.params else [data.params]
 				# FIXME: ignore if data.id was already seen?
 				# descend into context own properties
-				console.log 'CALL', data
+				#console.log 'CALL', data
 				fn = U.drill context, data.method
 				if fn
 					#console.log 'CALLING'
-					args.push response = (err, result) ->
+					args.push handleResponse = (err, result) ->
 						#console.log 'RESULT', arguments
 						#res.send err or result
 						response =
@@ -175,11 +237,11 @@ module.exports.jsonrpc = (options) ->
 						else
 							response.result = result
 						# respond
-						res.send response, 'content-type': 'application/json-rpc'
+						res.send response, 'content-type': 'application/json-rpc; charset=utf-8'
 					try
 						fn.apply context, args
 					catch x
-						response x.message
+						handleResponse x.message
 				else
 					next()
 			else

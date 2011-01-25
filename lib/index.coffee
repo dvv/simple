@@ -43,16 +43,11 @@ global.sha1 = (data, key) ->
 #
 global.parseQuery = require('rql/parser').parseGently
 global.Query = require('rql/query').Query
+
 global.filterArray = require('rql/js-array').executeQuery
 U.mixin
 	query: (arr, query, params) ->
 		filterArray query, params or {}, arr
-
-#
-# Schema
-#
-Schema = require 'json-schema/lib/validate'
-global.validate = (instance, schema, options) -> Schema._validate instance, schema, U.extend(options or {}, coerce: coerce)
 
 #
 # http.IncomingMessage
@@ -66,3 +61,4 @@ require './response'
 
 module.exports =
 	run: require './server'
+	handlers: require './handlers'

@@ -1,23 +1,17 @@
 'use strict'
 
-sys = require 'util'
-spawn = require('child_process').spawn
-net = require 'net'
-netBinding = process.binding 'net'
-fs = require 'fs'
-http = require 'http'
-crypto = require 'crypto'
-
-#
-# FIXME: global settings
-# FIXME: global facets
-# FIXME: should use stack
-#
-
 #
 # farm factory, takes configuration and the request handler
 #
 module.exports = (handler, options) ->
+
+	sys = require 'util'
+	spawn = require('child_process').spawn
+	net = require 'net'
+	netBinding = process.binding 'net'
+	fs = require 'fs'
+	http = require 'http'
+	crypto = require 'crypto'
 
 	# options
 	options ?= {}
@@ -105,7 +99,11 @@ module.exports = (handler, options) ->
 			env._WID_ = id
 			[outfd, infd] = netBinding.socketpair()
 			# spawn worker process
-			worker = spawn args[0], args.slice(1), env, [infd, 1, 2]
+			worker = spawn args[0], args.slice(1),
+				#cwd: undefined
+				env: env
+				customFds: [infd, 1, 2]
+				#setsid: false
 			# establish communication channel to the worker
 			worker.comm = new net.Stream outfd, 'unix'
 			# init respawning
@@ -138,19 +136,9 @@ module.exports = (handler, options) ->
 				(if options.sslKey then 's' else '') + "://*:#{options.port}/. Use CTRL+C to stop."
 
 		# start REPL
-		#if options.repl
-		#	stdin = process.openStdin()
-		#	stdin.on 'close', process.exit
-		#	repl = require('repl').start 'node>', stdin
-
-	process.errorHandler = (err) ->
-		# err could be: number, string, instanceof Error, simple object
-		# TODO: store exception state under filesystem and emit issue ticket
-		#text = '' #err.message or err
-		logText = err.stack if err.stack
-		sys.debug logText
-		text = err.stack if err.stack and options.stackTrace
-		text or 500
+		if options.repl
+			process.stdin.on 'close', process.exit
+			repl = require('repl').start 'node>'
 
 	process.on 'uncaughtException', (err) ->
 		# http://www.debuggable.com/posts/node-js-dealing-with-uncaught-exceptions:4c933d54-1428-443c-928d-4e1ecbdd56cb

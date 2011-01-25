@@ -20,6 +20,7 @@ http.ServerResponse::send = (body, headers, status) ->
 	@headers ?= {}
 	# determine content type
 	if body instanceof Error
+		# TODO: move to Stack.errorHandler
 		if body instanceof URIError
 			status = 400
 			body = body.message

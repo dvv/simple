@@ -3,12 +3,6 @@
 Database = require('mongo').Database
 ObjectID = require('mongo').ObjectID
 
-#
-# RQL
-#
-parseRQL = require('rql/parser').parseGently
-Query = require('rql/query').Query
-
 # valid funcs
 valid_funcs = ['lt', 'lte', 'gt', 'gte', 'ne', 'in', 'nin', 'not', 'mod', 'all', 'size', 'exists', 'type', 'elemMatch']
 # funcs which definitely require array arguments
@@ -81,10 +75,10 @@ parse = (query) ->
 		# TODO: add support for server-side functions
 		search
 
-	# FIXME: parseRQL of normalized query should be idempotent!!!
+	# FIXME: parseQuery of normalized query should be idempotent!!!
 	# TODO: more robustly determine already normal query!
 	# TODO: RQL as executor: Query().le(a,1).fetch() <== real action
-	query = parseRQL(query).normalize({primaryKey: '_id'}) unless query?.sortObj
+	query = parseQuery(query).normalize({primaryKey: '_id'}) unless query?.sortObj
 	search = walk query.search.name, query.search.args
 	options.sort = query.sortObj if query.sortObj
 	options.fields = query.selectObj if query.selectObj
@@ -93,6 +87,12 @@ parse = (query) ->
 		options.skip = query.limit[1]
 	#console.log meta: options, search: search, terms: query
 	meta: options, search: search, terms: query
+
+#
+# Schema
+#
+Schema = require 'json-schema/lib/validate'
+validate = (instance, schema, options) -> Schema._validate instance, schema, U.extend(options or {}, coerce: coerce)
 
 #
 # Storage
