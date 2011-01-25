@@ -1,8 +1,5 @@
 'use strict'
 
-Database = require('mongo').Database
-ObjectID = require('mongo').ObjectID
-
 # valid funcs
 valid_funcs = ['lt', 'lte', 'gt', 'gte', 'ne', 'in', 'nin', 'not', 'mod', 'all', 'size', 'exists', 'type', 'elemMatch']
 # funcs which definitely require array arguments
@@ -98,12 +95,10 @@ validate = (instance, schema, options) -> Schema._validate instance, schema, U.e
 # Storage
 #
 
-db = new Database settings.database.url, hex: true
-
 nop = () -> console.log.apply console, ['STORE'].concat arguments
 
-Storage =
-	insert: (collection, schema, document, next) ->
+Store = (db, collection, schema) ->
+	insert: (document, next) ->
 		next ?= nop
 		document ?= {}
 		if schema
@@ -124,7 +119,7 @@ Storage =
 			result.id = result._id
 			delete result._id
 			next null, result
-	update: (collection, schema, query, changes, next) ->
+	update: (query, changes, next) ->
 		next ?= nop
 		changes ?= {}
 		if schema
@@ -142,7 +137,7 @@ Storage =
 		db.update collection, search, changes, (err, result) ->
 			return next SyntaxError err.message if err
 			next null
-	find: (collection, schema, query, next) ->
+	find: (query, next) ->
 		next ?= nop
 		#console.log 'FIND?', query
 		query = parse query
@@ -159,7 +154,7 @@ Storage =
 				doc.id = doc._id
 				delete doc._id
 			next null, result
-	findOne: (collection, schema, query, next) ->
+	findOne: (query, next) ->
 		next ?= nop
 		query = parse query
 		return next URIError query.terms.search.error if query.terms.search.error
@@ -173,7 +168,7 @@ Storage =
 				result.id = result._id
 				delete result._id
 			next null, result
-	get: (collection, schema, id, next) ->
+	get: (id, next) ->
 		next ?= nop
 		return next null, null unless id
 		#@findOne collection, schema, "id=#{id}", next
@@ -186,7 +181,7 @@ Storage =
 						console.log 'MODIFIED', doc, arguments
 						fn e, d if fn
 			next err, doc
-	remove: (collection, query, next) ->
+	remove: (query, next) ->
 		next ?= nop
 		query = parse query
 		# naive fuser
@@ -198,21 +193,22 @@ Storage =
 #########################################
 
 #
-# Store -- set of DB accessor methods bound to the db and the collection and the optional schema
+# Store -- set of DB accessor methods ###bound to the db and the collection and the optional schema
 #
-Store = (entity, options, overrides...) ->
+Model = (db, entity, options, overrides...) ->
 	options ?= {}
+	storage = Store db, entity, options.schema
 	store =
-		all: Storage.find.bind Storage, entity, options.schema
-		_all: Storage.find.bind Storage, entity
-		one: Storage.findOne.bind Storage, entity, options.schema
-		get: Storage.get.bind Storage, entity, options.schema
-		_get: Storage.get.bind Storage, entity
-		add: Storage.insert.bind Storage, entity, options.schema
-		_add: Storage.insert.bind Storage, entity
-		update: Storage.update.bind Storage, entity, options.schema
-		_update: Storage.update.bind Storage, entity
-		remove: Storage.remove.bind Storage, entity
+		all: storage.find.bind storage, entity, options.schema
+		_all: storage.find.bind storage, entity
+		one: storage.findOne.bind storage, entity, options.schema
+		get: storage.get.bind storage, entity, options.schema
+		_get: storage.get.bind storage, entity
+		add: storage.insert.bind storage, entity, options.schema
+		_add: storage.insert.bind storage, entity
+		update: storage.update.bind storage, entity, options.schema
+		_update: storage.update.bind storage, entity
+		remove: storage.remove.bind storage, entity
 	Object.defineProperty store, 'id', value: entity
 	Object.defineProperty store, 'schema', value: options.schema
 	Object.freeze Compose.create.apply Compose, [store].concat overrides
@@ -222,6 +218,7 @@ Store = (entity, options, overrides...) ->
 #
 # Model -- set of overloaded Store methods plus business logic
 #
+'''
 Model = (entity, store, options, overrides) ->
 	model = Compose.create store or Store(entity, options), overrides
 	Object.defineProperty model, 'where', value: (query) ->
@@ -233,8 +230,8 @@ Model = (entity, store, options, overrides) ->
 		Object.defineProperty q, 'one', value: () -> model.one q
 		q
 	Object.freeze model
-
 Model = Store
+'''
 
 #########################################
 
@@ -256,16 +253,12 @@ Facet = (model, options, expose) ->
 			name = definition
 			method = model[name]
 		#
-		fn = method
-		facet[name] = fn if fn
+		facet[name] = method if method
 	Object.freeze facet
 
 # expose collection accessors plus enlisted model methods
 PermissiveFacet = (model, options, expose...) ->
 	Facet model, options, ['all', 'get', 'add', 'update', 'remove'].concat(expose or [])
-
-PermissiveFacet1 = (model, options, expose...) ->
-	Facet model, options, [['get', 'get' + model.id], ['add', 'create' + model.id], ['update', 'update' + model.id], ['all', 'get' + model.id + 'List'], ['remove', 'remove' + model.id]].concat(expose or [])
 
 # expose only collection _getters_ plus enlisted model methods
 RestrictiveFacet = (model, options, expose...) ->

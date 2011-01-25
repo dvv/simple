@@ -6,16 +6,13 @@
 
 http = require 'http'
 parseUrl = require('url').parse
+path = require 'path'
 
 http.IncomingMessage::parse = () ->
 
 	# parse URL
-	# N.B. we prohibit /../
-	path = @url
-	while lastPath isnt path
-		lastPath = path
-		path = path.replace /\/[^\/]*\/\.\.\//, '/'
-	@location = parseUrl path, true
+	@url = path.normalize @url
+	@location = parseUrl @url, true
 
 	# N.B. from now on querystring is stripped from the leading "?"
 	@location.search = @location.search?.substring 1
