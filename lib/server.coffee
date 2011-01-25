@@ -5,13 +5,9 @@
 #
 module.exports = (handler, options) ->
 
-	sys = require 'util'
 	spawn = require('child_process').spawn
 	net = require 'net'
 	netBinding = process.binding 'net'
-	fs = require 'fs'
-	http = require 'http'
-	crypto = require 'crypto'
 
 	# options
 	options ?= {}
@@ -21,33 +17,16 @@ module.exports = (handler, options) ->
 	node = new process.EventEmitter()
 
 	# setup server
-	server = http.createServer()
-
 	# SSL?
 	if options.sslKey
-		credentials = crypto.createCredentials
+		fs = require 'fs'
+		credentials =
 			key: fs.readFileSync options.sslKey, 'utf8'
 			cert: fs.readFileSync options.sslCert, 'utf8'
 			#ca: options.sslCACerts.map (fname) -> fs.readFileSync fname, 'utf8'
-		server.setSecure credentials
-	server.on 'request', handler
-
-	# websocket?
-	if options.websocket
-		#ws = require('ws-server').createServer debug: true, server: server
-		ws = require('socket.io').listen server, flashPolicyServer: false
-		ws.on 'connection', (client) ->
-			client.broadcast JSON.stringify channel: 'bcast', client: client.sessionId, message: 'IAMIN'
-			client.on 'disconnect', () ->
-				ws.broadcast JSON.stringify channel: 'bcast', client: client.sessionId, message: 'IAMOUT'
-			client.on 'message', (message) ->
-				#console.log 'MESSAGE', message
-				client.broadcast JSON.stringify channel: 'bcast', client: client.sessionId, message: message
-		# broadcast to clients what is published to 'bcast' channel
-		dbPubSub = redis.createClient()
-		dbPubSub.on 'message', (channel, message) ->
-			ws.broadcast JSON.stringify channel: channel, message: message.toString('utf8')
-		dbPubSub.subscribe 'bcast'
+		server = require('https').createServer credentials, handler
+	else
+		server = require('http').createServer handler
 
 	# worker branch
 	if process.env._WID_
