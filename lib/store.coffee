@@ -51,56 +51,87 @@ class Store
 		Object.defineProperty @_query, 'one', value: () -> @one @_query
 		@_query
 
-applySchema = (store, schema) ->
+applySchema = (store, schema) -> self =
 	add: (document, next) ->
 		document ?= {}
+		console.log 'BEFOREADD', document, schema
+		# validate document
 		if schema
-			#console.log 'BEFOREADD', document, schema
-			validation = validate document, schema, vetoReadOnly: true, flavor: 'add'
+			validation = validate document, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add'
 			if not validation.valid
-				return next SyntaxError JSON.stringify validation.errors
+				next validation.errors
+				return
+		# update meta
+		document._meta =
+			creator: @ and @user?.id
+		# insert document
 		store.add document, (err, result) ->
-			return next err if err
+			if err
+				next err
+				return
+			console.log 'AFTERADD', arguments
+			# filter out protected fields
 			if schema
 				validate result, schema, vetoReadOnly: true, flavor: 'get'
 			next null, result
 	update: (query, changes, next) ->
 		changes ?= {}
+		console.log 'BEFOREUPDATE', query, changes, schema
+		# validate document
 		if schema
-			validation = validate changes, schema, vetoReadOnly: true, existingOnly: true, flavor: 'update'
+			validation = validate changes, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update'
 			if not validation.valid
-				return next SyntaxError JSON.stringify validation.errors
+				next validation.errors
+				return
+		# update meta
+		changes._meta =
+			modifier: @ and @user?.id
+		# update documents
 		store.update query, changes, (err, result) ->
-			return next err if err
+			console.log 'AFTERUPDATE', arguments
+			if err
+				next err
+				return
 			next()
+		# FIXME: can't afford returning undefined everywhere!!!
+		return
 	query: (query, next) ->
 		store.query query, (err, result) ->
-			#console.log 'FOUND', arguments
-			return next err if err
+			console.log 'FOUND', arguments
+			if err
+				next err
+				return
+			# filter out protected fields
 			if schema
-				for k, doc in result
-					validate doc, schema, vetoReadOnly: true, flavor: 'get'
+				for doc, k in result
+					validate doc, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 			next null, result
 	one: (query, next) ->
 		store.one query, (err, result) ->
 			#console.log 'FONE!', query, arguments
-			return next err if err
+			if err
+				next err
+				return
 			result ?= null
+			# filter out protected fields
 			if schema and result
-				validate result, schema, vetoReadOnly: true, flavor: 'get'
+				validate result, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 			next null, result
-	get: (id, next) ->
+	get: (id, next) -> self.one.call @, "id=#{id}", next
+	_get: (id, next) ->
 		store.get id, (err, result) ->
 			#console.log 'GOT!', query, arguments
-			return next err if err
+			if err
+				next err
+				return
 			result ?= null
+			# filter out protected fields
 			if schema and result
-				validate result, schema, vetoReadOnly: true, flavor: 'get'
+				validate result, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 			next null, result
 	remove: (query, next) ->
 		store.remove query, (err, result) ->
-			return next err if err
-			next()
+			next err, result
 
 #########################################
 

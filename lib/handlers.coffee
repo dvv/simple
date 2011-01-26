@@ -22,6 +22,7 @@ module.exports.static = (options) ->
 
 		# attach request to response
 		res.req = req
+		res.headers ?= {}
 
 		# serve files
 		# no static file? -> none of our business
@@ -77,7 +78,7 @@ module.exports.body = (options) ->
 #
 # decode request JSON body
 #
-module.exports.jsonBody = (options) ->
+module.exports.jsonBody123123123 = (options) ->
 
 	options ?= {}
 
@@ -179,79 +180,118 @@ module.exports.jsonrpc = (options) ->
 	# TODO: here require RQL.parseQuery
 	# TODO: require json-rpc.handle
 
-	handler = (req, res, next) ->
+	(req, res, next) ->
 
-		#
-		# parse the query
-		#
-		search = req.location.search or ''
-		query = parseQuery search
-		#console.log 'QUERY', query
-		return next URIError query.error if query.error
-		#
-		# find the method which will handle the request
-		#
-		method = req.method
-		parts = req.location.pathname.substring(1).split '/'
-		data = req.params
-		context = req.context
-		#
-		# translate GET into fake RPC call
-		#
-		if method is 'GET'
-			#
-			# GET /Foo?query --> POST /Foo {method: 'all', params: [query]}
-			# GET /Foo/ID?query --> POST /Foo {method: 'get', params: [ID]}
-			#
-			# N.B. parts are decodeURIComponent'ed in U.drill
-			data =
-				jsonrpc: '2.0'
-				id: 1
-			if parts[1]
-				data.method = 'get'
-				data.params = [parts[1]]
-			else
-				data.method = 'query'
-				data.params = [query]
-			method = 'POST'
-		if method is 'POST'
-			#
-			# POST / {method: M, params: P,...} --> context[M].apply context, P
-			# POST /Foo {method: [M, N], params: P,...} --> context.Foo[M][N].apply context, P
-			#
-			data.method = [parts[0], data.method] unless parts[0] is ''
-			#r = jsonrpc.handle context, data
-			# TODO: multiple chunks
-			if data.jsonrpc and data.id and data.method
-				args = if Array.isArray data.params then data.params else [data.params]
-				# FIXME: ignore if data.id was already seen?
-				# descend into context own properties
-				#console.log 'CALL', data
-				fn = U.drill context, data.method
-				if fn
-					#console.log 'CALLING'
-					args.push handleResponse = (err, result) ->
-						#console.log 'RESULT', arguments
-						#res.send err or result
-						response =
-							jsonrpc: data.jsonrpc
-							id: data.id
-						if err
-							response.error = err
+		Step(
+			() ->
+				cb = @
+				if req.method is 'POST' and req.headers['content-type'].split(';')[0] is 'application/json'
+					req.params = {}
+					body = ''
+					req.on 'data', (chunk) ->
+						body += chunk.toString 'utf8'
+						# fuser not to exhaust memory
+						if body.length > options.maxBodyLength > 0
+							cb 'Length exceeded'
+					req.on 'end', () ->
+						try
+							# TODO: use kriszyp's one to relax accepted formatting?
+							req.params = JSON.parse body
+							cb()
+						catch x
+							cb x.message
+					undefined
+				else
+					null
+			(err) ->
+				#console.log 'PARSEDBODY', err, req.params
+				cb = @
+				# pass errors to serializer
+				if err
+					cb err
+					return  
+				#
+				# parse the query
+				#
+				search = req.location.search or ''
+				query = parseQuery search
+				#console.log 'QUERY', query
+				if query.error
+					cb query.error
+					return
+				#
+				# find the method which will handle the request
+				#
+				method = req.method
+				parts = req.location.pathname.substring(1).split '/'
+				data = req.params
+				context = req.context
+				#
+				# translate GET into fake RPC call
+				#
+				if method is 'GET'
+					#
+					# GET /Foo?query --> POST /Foo {method: 'all', params: [query]}
+					# GET /Foo/ID?query --> POST /Foo {method: 'get', params: [ID]}
+					#
+					# N.B. parts are decodeURIComponent'ed in U.drill
+					data =
+						jsonrpc: '2.0'
+						id: 1
+					if parts[1]
+						data.method = 'get'
+						data.params = [parts[1]]
+					else
+						data.method = 'query'
+						data.params = [query]
+					method = 'POST'
+				if method is 'POST'
+					#
+					# POST / {method: M, params: P,...} --> context[M].apply context, P
+					# POST /Foo {method: [M, N], params: P,...} --> context.Foo[M][N].apply context, P
+					#
+					data.method = [parts[0], data.method] unless parts[0] is ''
+					#r = jsonrpc.handle context, data
+					# TODO: multiple chunks
+					if data.jsonrpc and data.id and data.method
+						# FIXME: ignore if data.id was already seen?
+						# descend into context own properties
+						#
+						# TODO:
+						# update takes _array_ [query, changes]
+						#
+						#
+						#console.log 'CALL', data
+						fn = U.drill context, data.method
+						if fn
+							args = if Array.isArray data.params then data.params else [data.params]
+							args.push cb
+							console.log 'CALLING', args
+							fn.apply context, args
 						else
-							response.result = result
-						# respond
-						res.send response, 'content-type': 'application/json-rpc; charset=utf-8'
-					try
-						fn.apply context, args
-					catch x
-						handleResponse x.message
+							cb 'Forbidden'
+							return
+					else
+						cb 'Invalid format'
+						return
 				else
 					next()
-			else
-				next()
-		else
-			next()
+					return
+			(err, result) ->
+				console.log 'RESULT', arguments
+				#res.send err or result
+				response =
+					jsonrpc: data?.jsonrpc or '2.0'
+				response.id = data.id if data?.id
+				if err
+					response.error = err.message or err
+				else
+					response.result = result or true
+				# respond
+				#res.headers['content-type'] = 'application/json-rpc; charset=utf-8'
+				#next null, response
+				res.send response, 'content-type': 'application/json-rpc; charset=utf-8'
+		)
 
 #
 # bind a handler to a location, and optionally HTTP verb

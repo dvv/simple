@@ -105,6 +105,12 @@ class Storage
 		if document.id
 			document._id = document.id
 			delete document.id
+		# add history line
+		document._meta =
+			history: [
+				who: document._meta?.creator
+				when: Date.now()
+			]
 		@db.insert collection, document, (err, result) ->
 			if err
 				err = SyntaxError 'Duplicated' if err.code is 11000
@@ -117,14 +123,20 @@ class Storage
 	update: (collection, query, changes, next) ->
 		next ?= nop
 		changes ?= {}
+		# add history line
+		history =
+			who: changes._meta.modifier
+			when: Date.now()
+		delete changes._meta
+		history.what = changes 
 		query = parse query
 		search = query.search
 		search.$atomic = 1
 		# ensure changes are in multi-update format
-		# FIXME: can be security breach to not check for $set/$unset!
-		# FIXME: OTOH -- it;s they way to bypass schema for authorized needs
 		# FIXME: should prohibit $set and id in changes at facet level!!!
-		changes = {$set: changes} unless changes.$set or changes.$unset
+		changes = $set: changes #unless changes.$set or changes.$unset
+		changes.$push = '_meta.history': history
+		console.log 'UPDATE', changes
 		@db.update collection, search, changes, (err, result) ->
 			return next SyntaxError err.message if err
 			next()
@@ -140,7 +152,7 @@ class Storage
 		@db.find collection, query.search, query.meta, (err, result) ->
 			#console.log 'FOUND', arguments
 			return next URIError err.message if err
-			for i, doc in result
+			for doc, i in result
 				doc.id = doc._id
 				delete doc._id
 			next null, result
