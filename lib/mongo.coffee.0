@@ -21,7 +21,7 @@ parse = (query) ->
 			args = term.args
 			# ignore bad terms
 			# N.B. this filters quirky terms such as for ?or(1,2) -- term here is a plain value
-			return unless func and args
+			return if not func or not args
 			# http://www.mongodb.org/display/DOCS/Querying
 			# nested terms? -> recurse
 			if args[0] instanceof Query
@@ -39,8 +39,6 @@ parse = (query) ->
 				# args[0] is the name of the property
 				key = args.shift()
 				key = key.join('.') if Array.isArray key
-				# prohibit keys started with $
-				return if key.charAt(0) is '$'
 				# the rest args are parameters to func()
 				if 0 <= requires_array.indexOf func
 					args = args[0]
@@ -94,15 +92,13 @@ parse = (query) ->
 nop = () -> console.log.apply console, ['STORE'].concat arguments
 
 Database = require('mongo').Database
-events = require 'events'
 
-class Storage extends events.EventEmitter
+class Storage
 
 	constructor: (options) ->
 		options ?= {}
 		@db = new Database options.url, hex: true
-		@filterBy = options.filterBy
-		@events = options.events
+		@delayRemove = options.delayRemove
 
 	insert: (collection, document, next) ->
 		next ?= nop
@@ -116,91 +112,73 @@ class Storage extends events.EventEmitter
 				who: document._meta?.creator
 				when: Date.now()
 			]
-		self = @
 		@db.insert collection, document, (err, result) ->
 			if err
 				err = 'Duplicated' if err.code is 11000
 				err = err.message if err.code
-			else
-				result.id = result._id
-				delete result._id
-			if self.events is true or self.events?.add
-				self.emit 'add',
-					collection: collection
-					result: document
-					error: err
-			next err, result
+				return next err
+			result.id = result._id
+			delete result._id
+			next null, result
 
 	update: (collection, query, changes, next) ->
 		next ?= nop
 		changes ?= {}
-		#console.log 'UPDATE?', changes
 		# add history line
 		history =
 			who: changes._meta.modifier
 			when: Date.now()
+		if changes._meta.deleted?
+			#console.log 'REMOVE BY UPDATE', changes._meta.deleted
+			history.deleted = changes._meta.deleted
 		delete changes._meta
-		history.what = changes
+		history.what = changes # shouldn't be U.clone here?!
 		query = parse query
 		search = query.search
 		search.$atomic = 1
 		# ensure changes are in multi-update format
 		# FIXME: should prohibit $set and id in changes at facet level!!!
 		changes = $set: changes #unless changes.$set or changes.$unset
+		if history.deleted is true
+			changes.$set['_meta.deleted'] = true
+		else if history.deleted is false
+			changes.$unset = '_meta.deleted': 1
 		changes.$push = '_meta.history': history
-		#console.log 'UPDATE!', changes
-		self = @
+		#console.log 'UPDATE', changes
 		@db.update collection, search, changes, (err, result) ->
-			if self.events is true or self.events?.update
-				self.emit 'update',
-					collection: collection
-					search: search
-					changes: changes
-					result: result
-					error: err?.message
-			next err?.message
+			next(err and err.message)
 
 	find: (collection, query, next) ->
 		next ?= nop
 		#console.log 'FIND?', query
+		if @delayRemove
+			query = parseQuery(query).ne('_meta.deleted',true)
 		query = parse query
 		#console.log 'FIND!', query.search
 		return next query.terms.search.error if query.terms.search.error
 		# limit the limit
 		#query.meta.limit = @limit if @limit < query.meta.limit
-		self = @
 		@db.find collection, query.search, query.meta, (err, result) ->
 			#console.log 'FOUND', arguments
 			for doc, i in result
 				doc.id = doc._id
 				delete doc._id
-			if self.events is true or self.events?.find
-				self.emit 'find',
-					collection: collection
-					search: query.search
-					result: result
-					error: err?.message
-			next err?.message, result
+			next err and err.message, result
 
 	findOne: (collection, query, next) ->
 		next ?= nop
+		if @delayRemove
+			query = parseQuery(query).ne('_meta.deleted',true)
 		query = parse query
 		return next query.terms.search.error if query.terms.search.error
-		self = @
 		@db.findOne collection, query.search, query.meta, (err, result) ->
 			#console.log 'FONE!', query, arguments
+			return next err.message if err
+			result ?= null
 			if result
 				result.id = result._id
 				delete result._id
-			else
-				result = null
-			if self.events is true or self.events?.findOne
-				self.emit 'findOne',
-					collection: collection
-					search: query.search
-					result: result
-					error: err?.message
-			next err?.message, result
+			next null, result
 
 	get: (collection, id, next) ->
 		next ?= nop
@@ -209,19 +187,28 @@ class Storage extends events.EventEmitter
 
 	remove: (collection, query, next) ->
 		next ?= nop
+		if @delayRemove
+			query = parseQuery(query).ne('_meta.deleted',true)
 		query = parse query
-		# naive fuser
-		return next 'Refuse to remove all documents w/o conditions' unless Object.keys(query.search).length
-		#console.log 'REMOVE', query
-		self = @
-		@db.remove collection, query.search, (err, result) ->
-			if self.events is true or self.events?.remove
-				self.emit 'remove',
-					collection: collection
-					search: query.search
-					result: result
-					error: err?.message
-			next err?.message, result
+		if @delayRemove
+			@update collection, query.search, {_meta: {deleted: true}}, (err, result) ->
+				next err and err.message, result
+		else
+			# naive fuser
+			#return next TypeError 'Use drop() instead to remove the whole collection' unless Object.keys(query.search).length
+			return next 'Refuse to remove all documents. Specify conditions' unless Object.keys(query.search).length
+			@db.remove collection, query.search, (err, result) ->
+				next err and err.message, result
+
+	undelete: (collection, query, next) ->
+		next ?= nop
+		if @delayRemove
+			query = parseQuery(query).eq('_meta.deleted',true)
+			query = parse query
+			@update collection, query.search, {_meta: {deleted: false}}, (err, result) ->
+				next err and err.message, result
+		else
+			next 'Not implemented'
 
 module.exports =
 	Storage: Storage

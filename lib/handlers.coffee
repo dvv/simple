@@ -184,32 +184,32 @@ module.exports.jsonrpc = (options) ->
 
 		Step(
 			() ->
-				cb = @
-				if req.method is 'POST' and req.headers['content-type'].split(';')[0] is 'application/json'
+				nextStep = @
+				if (req.method is 'POST' or req.method is 'PUT')  and req.headers['content-type'].split(';')[0] is 'application/json'
 					req.params = {}
 					body = ''
 					req.on 'data', (chunk) ->
 						body += chunk.toString 'utf8'
 						# fuser not to exhaust memory
 						if body.length > options.maxBodyLength > 0
-							cb 'Length exceeded'
+							nextStep 'Length exceeded'
 					req.on 'end', () ->
 						try
 							# TODO: use kriszyp's one to relax accepted formatting?
 							req.params = JSON.parse body
-							cb()
+							nextStep()
 						catch x
-							cb x.message
-					undefined
+							nextStep x.message
+					return
 				else
 					null
 			(err) ->
 				#console.log 'PARSEDBODY', err, req.params
-				cb = @
+				nextStep = @
 				# pass errors to serializer
 				if err
-					cb err
-					return  
+					nextStep err
+					return
 				#
 				# parse the query
 				#
@@ -217,7 +217,7 @@ module.exports.jsonrpc = (options) ->
 				query = parseQuery search
 				#console.log 'QUERY', query
 				if query.error
-					cb query.error
+					nextStep query.error
 					return
 				#
 				# find the method which will handle the request
@@ -231,60 +231,92 @@ module.exports.jsonrpc = (options) ->
 				#
 				if method is 'GET'
 					#
-					# GET /Foo?query --> POST /Foo {method: 'all', params: [query]}
+					# GET /Foo?query --> POST /Foo {method: 'query', params: [query]}
 					# GET /Foo/ID?query --> POST /Foo {method: 'get', params: [ID]}
 					#
 					# N.B. parts are decodeURIComponent'ed in U.drill
-					data =
+					call =
 						jsonrpc: '2.0'
-						id: 1
+						method: 'query'
+						params: [query]
 					if parts[1]
-						data.method = 'get'
-						data.params = [parts[1]]
-					else
-						data.method = 'query'
-						data.params = [query]
-					method = 'POST'
-				if method is 'POST'
+						call.method = 'get'
+						call.params = [parts[1]]
+				else if method is 'PUT'
 					#
-					# POST / {method: M, params: P,...} --> context[M].apply context, P
-					# POST /Foo {method: [M, N], params: P,...} --> context.Foo[M][N].apply context, P
+					# PUT /Foo?query {changes} --> POST /Foo {method: 'update', params: [query, changes]}
+					# PUT /Foo/ID?query {changes} --> POST /Foo {method: 'update', params: [[ID], changes]}
 					#
-					data.method = [parts[0], data.method] unless parts[0] is ''
-					#r = jsonrpc.handle context, data
-					# TODO: multiple chunks
-					if data.jsonrpc and data.id and data.method
-						# FIXME: ignore if data.id was already seen?
-						# descend into context own properties
+					call =
+						jsonrpc: '2.0'
+						method: 'update'
+						params: [query, data]
+					if parts[1]
+						call.params = [[parts[1]], data]
+				else if method is 'POST'
+					if data.jsonrpc and data.method
+						call = data
+						#
+						# POST / {method: M, params: P,...} --> context[M].apply context, P
+						# POST /Foo {method: [M, N], params: P,...} --> context.Foo[M][N].apply context, P
 						#
 						# TODO:
 						# update takes _array_ [query, changes]
-						#
-						#
-						#console.log 'CALL', data
-						fn = U.drill context, data.method
-						if fn
-							args = if Array.isArray data.params then data.params else [data.params]
-							args.push cb
-							console.log 'CALLING', args
-							fn.apply context, args
-						else
-							cb 'Forbidden'
-							return
+						# FIXME: params check and recheck and triple check!!!
 					else
-						cb 'Invalid format'
-						return
+						#
+						# POST /Foo {props} --> context[Foo].add.apply context, props
+						#
+						call =
+							jsonrpc: '2.0'
+							method: 'add'
+							params: [data]
+				else if method is 'DELETE'
+					#
+					# DELETE /Foo?query --> POST /Foo {method: 'remove', params: [query]}
+					# DELETE /Foo/ID?query --> POST /Foo {method: 'remove', params: [[ID]]}
+					# DELETE /Foo/ID?query {ids:[]} --> POST /Foo {method: 'remove', params: [ids]}
+					#
+					call =
+						jsonrpc: '2.0'
+						method: 'remove'
+						#params: if Array.isArray data?.ids then [data.ids] else [query]
+						params: [query]
+					if parts[1]
+						call.params = [[parts[1]]]
 				else
-					next()
+					# verb not supported
+					return next()
+				#
+				# do RPC call
+				#
+				# descend into context own properties
+				#
+				#
+				call.method = [parts[0], call.method] unless parts[0] is ''
+				console.log 'CALL', call
+				fn = U.drill context, call.method
+				if fn
+					args = if Array.isArray call.params then call.params else [call.params]
+					args.push nextStep
+					if args.length isnt fn.length
+						return nextStep 406
+					console.log 'CALLING', args, fn.length
+					fn.apply context, args
 					return
+				else
+					nextStep 403
+					#return
 			(err, result) ->
 				console.log 'RESULT', arguments
 				#res.send err or result
 				response =
-					jsonrpc: data?.jsonrpc or '2.0'
-				response.id = data.id if data?.id
+					jsonrpc: '2.0'
+				#response.id = data.id if data?.id
 				if err
 					response.error = err.message or err
+				else if result is null
+					response.error = 404
 				else
 					response.result = result or true
 				# respond
