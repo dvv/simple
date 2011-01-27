@@ -51,6 +51,11 @@ class Store
 		Object.defineProperty @_query, 'one', value: () -> @one @_query
 		@_query
 
+#
+# put validating logic
+# - passed documents must obey schema's update/add flavors
+# - returned documents are filtered by schema's get flavor
+#
 applySchema = (store, schema) ->
 
 	filterBy = storage.filterBy #'active' # FIXME: dehardcode!!!
@@ -79,12 +84,12 @@ applySchema = (store, schema) ->
 				#console.log 'AFTERADD', arguments
 				# filter out protected fields
 				if schema
-					validate result, schema, vetoReadOnly: true, flavor: 'get'
+					validate result, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 				next null, result
 
 		update: (query, changes, next) ->
 			changes ?= {}
-			console.log 'BEFOREUPDATE', query, changes, schema
+			#console.log 'BEFOREUPDATE', query, changes, schema
 			# validate document
 			if schema
 				validation = validate changes, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update'
@@ -100,6 +105,9 @@ applySchema = (store, schema) ->
 				#console.log 'AFTERUPDATE', arguments
 				next err, result
 
+		#updateOwn: (query, changes, next) ->
+		#	self.update.call @, Query(query).eq('_meta.history.0.who', @ and @user?.id), changes, next
+
 		query: (query, next) ->
 			if filterBy
 				query = parseQuery(query).eq(filterBy,true)
@@ -113,6 +121,9 @@ applySchema = (store, schema) ->
 					for doc, k in result
 						validate doc, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 				next null, result
+
+		#queryOwn: (query, next) ->
+		#	self.query.call @, Query(query).eq('_meta.history.0.who', @ and @user?.id), next
 
 		one: (query, next) ->
 			if filterBy
@@ -128,7 +139,8 @@ applySchema = (store, schema) ->
 					validate result, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 				next null, result
 
-		get: (id, next) -> self.one.call @, "id=#{id}", next
+		get: (id, next) -> self.one.call @, Query('id',id), next
+		_get: (id, next) -> store.get id, next
 
 		remove: (query, next) ->
 			if filterBy
@@ -145,6 +157,16 @@ applySchema = (store, schema) ->
 				store.remove query, (err, result) ->
 					next err, result
 
+		delete: (query, next) ->
+			store.remove query, (err, result) ->
+				next err, result
+
+		purge: (query, next) ->
+			if filterBy
+				query = parseQuery(query).ne(filterBy,true)
+			store.remove query, (err, result) ->
+				next err, result
+
 		undelete: (query, next) ->
 			if filterBy
 				query = parseQuery(query).ne(filterBy,true)
@@ -158,6 +180,9 @@ applySchema = (store, schema) ->
 					next err, result
 			else
 				next 'Not implemented'
+
+		owned: (context, query) ->
+			if context?.user?.id then Query(query).eq('_meta.history.0.who', context?.user?.id) else Query(query)
 
 #########################################
 

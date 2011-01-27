@@ -148,9 +148,10 @@ module.exports.authCookie = (options) ->
 				# TODO: use res.req in res.send!
 				#
 				#
-				req.remember = (session) ->
+				#req.remember = (session) ->
+				Object.defineProperty context, 'remember', value: (session, callback) ->
 					cookieOptions = path: '/', httpOnly: true
-					if session
+					if session and session isnt true
 						#console.log 'SESSSET', session
 						# set the cookie
 						cookieOptions.expires = session.expires if session.expires
@@ -159,6 +160,7 @@ module.exports.authCookie = (options) ->
 						req.context = user: {}
 						#console.log 'SESSKILL'
 						res.clearCookie cookie, cookieOptions
+					callback()
 				next()
 	else
 		(req, res, next) ->
@@ -204,7 +206,7 @@ module.exports.jsonrpc = (options) ->
 				else
 					null
 			(err) ->
-				#console.log 'PARSEDBODY', err, req.params
+				console.log 'PARSEDBODY', err, req.params
 				nextStep = @
 				# pass errors to serializer
 				if err

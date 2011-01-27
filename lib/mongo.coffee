@@ -115,6 +115,7 @@ class Storage extends events.EventEmitter
 			history: [
 				who: document._meta?.creator
 				when: Date.now()
+				# FIXME: should we put initial document here?
 			]
 		self = @
 		@db.insert collection, document, (err, result) ->
@@ -185,10 +186,11 @@ class Storage extends events.EventEmitter
 	findOne: (collection, query, next) ->
 		next ?= nop
 		query = parse query
+		#console.log 'FONE?', query
 		return next query.terms.search.error if query.terms.search.error
 		self = @
 		@db.findOne collection, query.search, query.meta, (err, result) ->
-			#console.log 'FONE!', query, arguments
+			#console.log 'FONE!', arguments
 			if result
 				result.id = result._id
 				delete result._id
@@ -206,6 +208,8 @@ class Storage extends events.EventEmitter
 		next ?= nop
 		return next null, null unless id
 		@findOne collection, "id=#{id}", next
+		#console.log 'GET', id
+		#@findOne collection, Query('id',id), next
 
 	remove: (collection, query, next) ->
 		next ?= nop
