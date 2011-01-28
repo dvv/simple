@@ -247,7 +247,8 @@ module.exports.jsonrpc = (options) ->
 				else if method is 'PUT'
 					#
 					# PUT /Foo?query {changes} --> POST /Foo {method: 'update', params: [query, changes]}
-					# PUT /Foo/ID?query {changes} --> POST /Foo {method: 'update', params: [[ID], changes]}
+					# TODO: PUT /Foo/ID?query {changes} --> POST /Foo {method: 'update', params: [[ID], changes]}
+					# TODO: PUT /Foo/ID?query {ids:[], changes:changes} --> POST /Foo {method: 'update', params: [[ids], changes]}
 					#
 					call =
 						jsonrpc: '2.0'
@@ -276,8 +277,8 @@ module.exports.jsonrpc = (options) ->
 				else if method is 'DELETE'
 					#
 					# DELETE /Foo?query --> POST /Foo {method: 'remove', params: [query]}
-					# DELETE /Foo/ID?query --> POST /Foo {method: 'remove', params: [[ID]]}
-					# DELETE /Foo/ID?query {ids:[]} --> POST /Foo {method: 'remove', params: [ids]}
+					# TODO: DELETE /Foo/ID?query --> POST /Foo {method: 'remove', params: [[ID]]}
+					# TODO: DELETE /Foo/ID?query {ids:[]} --> POST /Foo {method: 'remove', params: [ids]}
 					#
 					call =
 						jsonrpc: '2.0'
@@ -308,7 +309,6 @@ module.exports.jsonrpc = (options) ->
 					return
 				else
 					nextStep 403
-					#return
 			(err, result) ->
 				console.log 'RESULT', arguments
 				#res.send err or result
