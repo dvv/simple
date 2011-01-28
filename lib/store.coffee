@@ -4,7 +4,8 @@
 # Schema
 #
 Schema = require 'json-schema/lib/validate'
-validate = (instance, schema, options) -> Schema._validate instance, schema, U.extend(options or {}, coerce: U.coerce)
+global.validate = (instance, schema, options) ->
+	Schema._validate instance, schema, U.extend(options or {}, coerce: U.coerce)
 
 #
 # Storage
@@ -96,14 +97,22 @@ applySchema = (store, schema) ->
 				if not validation.valid
 					next validation.errors
 					return
+			#
+			# TODO: shortcut on empty changes!
+			#
+			#console.log 'BEFOREUPDATEVALIDATED', query, changes
+			return next() unless U.keys changes
+			#
+			#
 			# update meta
 			changes._meta =
 				modifier: @ and @user?.id
-			#console.log 'BEFOREUPDATEVALIDATED', changes
 			# update documents
+			console.log 'STOREUPD1', query
 			store.update query, changes, (err, result) ->
-				#console.log 'AFTERUPDATE', arguments
+				console.log 'AFTERUPDATE', arguments
 				next err, result
+			console.log 'STOREUPD2', query
 
 		#updateOwn: (query, changes, next) ->
 		#	self.update.call @, Query(query).eq('_meta.history.0.who', @ and @user?.id), changes, next
@@ -127,7 +136,8 @@ applySchema = (store, schema) ->
 
 		one: (query, next) ->
 			if filterBy
-				query = parseQuery(query).eq(filterBy,true)
+				query = Query(query).eq(filterBy,true)
+			#console.log 'FONE?', query
 			store.one query, (err, result) ->
 				#console.log 'FONE!', query, arguments
 				if err
@@ -139,7 +149,7 @@ applySchema = (store, schema) ->
 					validate result, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 				next null, result
 
-		get: (id, next) -> self.one.call @, Query('id',id), next
+		get: (id, next) -> self.one.call @, Query().eq('id',id), next
 		_get: (id, next) -> store.get id, next
 
 		remove: (query, next) ->

@@ -1,5 +1,7 @@
 # TODO: as a separate lib
 
+U.mixin require 'underscore.string'
+
 # U.drill({a:{b:{c:[0,2,4]}}},['a','b','c',2]) ---> 4
 # U.drill({a:{b:{get:function(attr){return{c:[0,2,4]}[attr];}}}},['a','b','c',2]) ---> 4
 U.mixin
