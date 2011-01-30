@@ -179,7 +179,6 @@ module.exports.jsonrpc = (options) ->
 
 	options ?= {}
 
-	# TODO: here require RQL.parseQuery
 	# TODO: require json-rpc.handle
 
 	(req, res, next) ->
@@ -216,7 +215,7 @@ module.exports.jsonrpc = (options) ->
 				# parse the query
 				#
 				search = req.location.search or ''
-				query = parseQuery search
+				query = _.rql search
 				#console.log 'QUERY', query
 				if query.error
 					nextStep query.error
@@ -236,7 +235,7 @@ module.exports.jsonrpc = (options) ->
 					# GET /Foo?query --> POST /Foo {method: 'query', params: [query]}
 					# GET /Foo/ID?query --> POST /Foo {method: 'get', params: [ID]}
 					#
-					# N.B. parts are decodeURIComponent'ed in U.drill
+					# N.B. parts are decodeURIComponent'ed in _.drill
 					call =
 						jsonrpc: '2.0'
 						method: 'query'
@@ -298,7 +297,7 @@ module.exports.jsonrpc = (options) ->
 				#
 				call.method = [parts[0], call.method] unless parts[0] is ''
 				console.log 'CALL', call
-				fn = U.drill context, call.method
+				fn = _.drill context, call.method
 				if fn
 					args = if Array.isArray call.params then call.params else [call.params]
 					args.push nextStep

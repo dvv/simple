@@ -5,7 +5,7 @@
 #
 Schema = require 'json-schema/lib/validate'
 global.validate = (instance, schema, options) ->
-	Schema._validate instance, schema, U.extend(options or {}, coerce: U.coerce)
+	Schema._validate instance, schema, _.extend(options or {}, coerce: _.coerce)
 
 #
 # Storage
@@ -101,25 +101,27 @@ applySchema = (store, schema) ->
 			# TODO: shortcut on empty changes!
 			#
 			#console.log 'BEFOREUPDATEVALIDATED', query, changes
-			return next() unless U.keys changes
+			return next() unless _.keys changes
 			#
 			#
 			# update meta
 			changes._meta =
 				modifier: @ and @user?.id
 			# update documents
-			console.log 'STOREUPD1', query
+			#console.log 'STOREUPD1', query
 			store.update query, changes, (err, result) ->
-				console.log 'AFTERUPDATE', arguments
+				#console.log 'AFTERUPDATE', arguments
 				next err, result
-			console.log 'STOREUPD2', query
+			#console.log 'STOREUPD2', query
 
 		#updateOwn: (query, changes, next) ->
-		#	self.update.call @, Query(query).eq('_meta.history.0.who', @ and @user?.id), changes, next
+		#	self.update.call @, _.rql(query).eq('_meta.history.0.who', @ and @user?.id), changes, next
 
 		query: (query, next) ->
+			console.log 'FIND?', query
 			if filterBy
-				query = parseQuery(query).eq(filterBy,true)
+				query = _.rql(query).eq(filterBy,true)
+			console.log 'FIND!', query
 			store.query query, (err, result) ->
 				#console.log 'FOUND', arguments
 				if err
@@ -132,11 +134,11 @@ applySchema = (store, schema) ->
 				next null, result
 
 		#queryOwn: (query, next) ->
-		#	self.query.call @, Query(query).eq('_meta.history.0.who', @ and @user?.id), next
+		#	self.query.call @, _.rql(query).eq('_meta.history.0.who', @ and @user?.id), next
 
 		one: (query, next) ->
 			if filterBy
-				query = Query(query).eq(filterBy,true)
+				query = _.rql(query).eq(filterBy,true)
 			#console.log 'FONE?', query
 			store.one query, (err, result) ->
 				#console.log 'FONE!', query, arguments
@@ -149,12 +151,12 @@ applySchema = (store, schema) ->
 					validate result, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 				next null, result
 
-		get: (id, next) -> self.one.call @, Query().eq('id',id), next
+		get: (id, next) -> self.one.call @, _.rql().eq('id',id), next
 		_get: (id, next) -> store.get id, next
 
 		remove: (query, next) ->
 			if filterBy
-				query = parseQuery(query).eq(filterBy,true)
+				query = _.rql(query).eq(filterBy,true)
 				changes = {}
 				changes[filterBy] = false
 				# update meta
@@ -173,13 +175,13 @@ applySchema = (store, schema) ->
 
 		purge: (query, next) ->
 			if filterBy
-				query = parseQuery(query).ne(filterBy,true)
+				query = _.rql(query).ne(filterBy,true)
 			store.remove query, (err, result) ->
 				next err, result
 
 		undelete: (query, next) ->
 			if filterBy
-				query = parseQuery(query).ne(filterBy,true)
+				query = _.rql(query).ne(filterBy,true)
 				changes = {}
 				changes[filterBy] = true
 				# update meta
@@ -192,7 +194,7 @@ applySchema = (store, schema) ->
 				next 'Not implemented'
 
 		owned: (context, query) ->
-			if context?.user?.id then Query(query).eq('_meta.history.0.who', context?.user?.id) else Query(query)
+			if context?.user?.id then _.rql(query).eq('_meta.history.0.who', context?.user?.id) else _.rql(query)
 
 #########################################
 

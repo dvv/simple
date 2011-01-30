@@ -5,10 +5,6 @@
 #
 module.exports = (handler, options) ->
 
-	spawn = require('child_process').spawn
-	net = require 'net'
-	netBinding = process.binding 'net'
-
 	# options
 	options ?= {}
 	options.port ?= 80
@@ -33,14 +29,15 @@ module.exports = (handler, options) ->
 
 		Object.defineProperty node, 'id', value: process.env._WID_
 
+		conf = {}
 		# obtain the master socket from the master and listen to it
 		comm = new net.Stream 0, 'unix'
-		data = {}
 		comm.on 'data', (message) ->
 			# get config from master
-			data = JSON.parse message
-			Object.defineProperty data, 'wid', value: node.id
+			conf = JSON.parse message
+			Object.defineProperty conf, 'wid', value: node.id
 		comm.on 'fd', (fd) ->
+			# TODO: could use conf passed from master
 			server.listenFD fd, 'tcp4'
 			console.log "WORKER #{node.id} started"
 		comm.resume()
@@ -52,28 +49,33 @@ module.exports = (handler, options) ->
 		Object.defineProperty node, 'isMaster', value: true
 
 		# bind master socket
+		net = require 'net'
+		netBinding = process.binding 'net'
 		socket = netBinding.socket 'tcp4'
 		netBinding.bind socket, options.port
 		netBinding.listen socket, options.connections or 128
+
 		# attach the server if no workers needed
 		server.listenFD socket, 'tcp4' unless options.workers
 
 		# drop privileges
-		try
+		if process.getuid() is 0
 			process.setuid options.uid if options.uid
 			process.setgid options.gid if options.gid
-		catch err
-			console.log 'Sorry, failed to drop privileges'
+
+		# chdir
+		process.chdir options.pwd if options.pwd
 
 		# allow to override workers arguments
 		args = options.argv or process.argv
 		# copy environment
-		env = U.extend {}, process.env, options.env or {}
+		env = _.extend {}, process.env, options.env or {}
 
 		# array of listening processes
 		workers = []
 
 		# create workers
+		spawn = require('child_process').spawn
 		createWorker = (id) ->
 			env._WID_ = id
 			[outfd, infd] = netBinding.socketpair()

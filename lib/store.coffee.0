@@ -89,7 +89,7 @@ parse = (query) ->
 # Schema
 #
 Schema = require 'json-schema/lib/validate'
-validate = (instance, schema, options) -> Schema._validate instance, schema, U.extend(options or {}, coerce: coerce)
+validate = (instance, schema, options) -> Schema._validate instance, schema, _.extend(options or {}, coerce: _.coerce)
 
 #
 # Storage

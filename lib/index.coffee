@@ -6,10 +6,7 @@
 sys = require 'util'
 inspect = require('eyes.js').inspector stream: null
 consoleLog = console.log
-console.log = () ->
-	for arg in arguments
-		#sys.debug inspect arg
-		consoleLog inspect arg
+console.log = () -> consoleLog inspect arg for arg in arguments
 
 #
 # flow
@@ -21,7 +18,7 @@ Object.defineProperty global, 'nop', value: () ->
 # Object helpers
 #
 global.Compose = require 'compose'
-global.U = require 'underscore'
+global._ = require 'underscore'
 require './U.obj'
 
 #
@@ -41,13 +38,13 @@ global.sha1 = (data, key) ->
 #
 # RQL
 #
-global.parseQuery = require('rql/parser').parseGently
-global.Query = require('rql/query').Query
+#global.parseQuery = require('rql/parser').parseGently
+#global.Query = require('rql/query').Query
 
-global.filterArray = require('rql/js-array').executeQuery
-U.mixin
-	query: (arr, query, params) ->
-		filterArray query, params or {}, arr
+#global.filterArray = require('rql/js-array').executeQuery
+#_.mixin
+#	query: (arr, query, params) ->
+#		filterArray query, params or {}, arr
 
 #
 # http.IncomingMessage
