@@ -2,6 +2,8 @@
 
 _.mixin require 'underscore.string'
 
+_.mixin require './rql'
+
 # _.drill({a:{b:{c:[0,2,4]}}},['a','b','c',2]) ---> 4
 # _.drill({a:{b:{get:function(attr){return{c:[0,2,4]}[attr];}}}},['a','b','c',2]) ---> 4
 _.mixin
@@ -35,5 +37,3 @@ _.mixin
 				else if v1
 					obj[k1] = _.veto(v1, if k.length > 1 then [k] else k)
 		obj
-
-_.mixin require './rql'

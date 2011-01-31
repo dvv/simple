@@ -1,194 +1,213 @@
 'use strict'
 
-# valid funcs
-valid_funcs = ['lt', 'lte', 'gt', 'gte', 'ne', 'in', 'nin', 'not', 'mod', 'all', 'size', 'exists', 'type', 'elemMatch']
-# funcs which definitely require array arguments
-requires_array = ['in', 'nin', 'all', 'mod']
-# funcs acting as operators
-valid_operators = ['or', 'and', 'not'] #, 'xor']
-
-parse = (query) ->
-
-	options = {}
-	search = {}
-
-	walk = (name, terms) ->
-		search = {} # compiled search conditions
-		# iterate over terms
-		(terms or []).forEach (term) ->
-			term ?= {}
-			func = term.name
-			args = term.args
-			# ignore bad terms
-			# N.B. this filters quirky terms such as for ?or(1,2) -- term here is a plain value
-			return if not func or not args
-			# http://www.mongodb.org/display/DOCS/Querying
-			# nested terms? -> recurse
-			if args[0] instanceof Query
-				if 0 <= valid_operators.indexOf func
-					search['$'+func] = walk func, args
-				# N.B. here we encountered a custom function
-				# ...
-			# http://www.mongodb.org/display/DOCS/Advanced+Queries
-			# structured query syntax
-			else
-				if func is 'le'
-					func = 'lte'
-				else if func is 'ge'
-					func = 'gte'
-				# args[0] is the name of the property
-				key = args.shift()
-				key = key.join('.') if Array.isArray key
-				# the rest args are parameters to func()
-				if 0 <= requires_array.indexOf func
-					args = args[0]
-				# match on regexp means equality
-				else if func is 'match'
-					func = 'eq'
-					regex = new RegExp
-					regex.compile.apply regex, args
-					args = regex
-				else
-					# FIXME: do we really need to .join()?!
-					args = if args.length is 1 then args[0] else args.join()
-				# regexp inequality means negation of equality
-				func = 'not' if func is 'ne' and args instanceof RegExp
-				# valid functions are prepended with $
-				func = '$'+func if 0 <= valid_funcs.indexOf func
-				# $or requires an array of conditions
-				if name is 'or'
-					search = [] unless Array.isArray search
-					x = {}
-					x[if func is 'eq' then key else func] = args
-					search.push x
-				# other functions pack conditions into object
-				else
-					# several conditions on the same property are merged into the single object condition
-					search[key] = {} if search[key] is undefined
-					search[key][func] = args if search[key] instanceof Object and not Array.isArray search[key]
-					# equality cancels all other conditions
-					search[key] = args if func is 'eq'
-		# TODO: add support for query expressions as Javascript
-		# TODO: add support for server-side functions
-		search
-
-	# FIXME: parseQuery of normalized query should be idempotent!!!
-	# TODO: more robustly determine already normal query!
-	# TODO: RQL as executor: Query().le(a,1).fetch() <== real action
-	query = parseQuery(query).normalize({primaryKey: '_id'}) unless query?.sortObj
-	search = walk query.search.name, query.search.args
-	options.sort = query.sortObj if query.sortObj
-	options.fields = query.selectObj if query.selectObj
-	if query.limit
-		options.limit = query.limit[0]
-		options.skip = query.limit[1]
-	#console.log meta: options, search: search, terms: query
-	meta: options, search: search, terms: query
-
 #
 # Schema
 #
-Schema = require 'json-schema/lib/validate'
-validate = (instance, schema, options) -> Schema._validate instance, schema, _.extend(options or {}, coerce: _.coerce)
+_validate = require './validate'
+global.validate = (instance, schema, options, next) -> _validate instance, schema, _.extend(options or {}, coerce: _.coerce), next
 
 #
 # Storage
 #
 
-nop = () -> console.log.apply console, ['STORE'].concat arguments
+storage = null
 
-Store = (db, collection, schema) ->
-	insert: (document, next) ->
-		next ?= nop
-		document ?= {}
-		if schema
-			#console.log 'BEFOREADD', document, schema
-			validation = validate document, schema, vetoReadOnly: true, flavor: 'add'
-			if not validation.valid
-				return next SyntaxError JSON.stringify validation.errors
-		if document.id
-			document._id = document.id
-			delete document.id
-		db.insert collection, document, (err, result) ->
-			if err
-				err = SyntaxError 'Duplicated' if err.code is 11000
-				err = SyntaxError err.message if err.code
-				return next err
-			if schema
-				validate result, schema, vetoReadOnly: true, flavor: 'get'
-			result.id = result._id
-			delete result._id
-			next null, result
-	update: (query, changes, next) ->
-		next ?= nop
-		changes ?= {}
-		if schema
-			validation = validate changes, schema, vetoReadOnly: true, existingOnly: true, flavor: 'update'
-			if not validation.valid
-				return next SyntaxError JSON.stringify validation.errors
-		query = parse query
-		search = query.search
-		search.$atomic = 1
-		# ensure changes are in multi-update format
-		# FIXME: can be security breach to not check for $set/$unset!
-		# FIXME: OTOH -- it;s they way to bypass schema for authorized needs
-		# FIXME: should prohibit $set and id in changes at facet level!!!
-		changes = {$set: changes} unless changes.$set or changes.$unset
-		db.update collection, search, changes, (err, result) ->
-			return next SyntaxError err.message if err
-			next null
-	find: (query, next) ->
-		next ?= nop
-		#console.log 'FIND?', query
-		query = parse query
-		#console.log 'FIND!', query.search
-		return next URIError query.terms.search.error if query.terms.search.error
-		# limit the limit
-		#query.meta.limit = @limit if @limit < query.meta.limit
-		db.find collection, query.search, query.meta, (err, result) ->
-			#console.log 'FOUND', arguments
-			return next URIError err.message if err
-			result.forEach (doc) ->
+module.exports = (options) ->
+	options ?= {}
+	storage = new (require('./mongo').Storage) options
+	Object.freeze
+		onevent: storage.on.bind storage
+		Store: Store0
+		applySchema: applySchema
+
+#
+# Store -- set of DB accessor methods for a particular collection, bound to the db and the collection
+#
+Store0 = (entity) ->
+	store =
+		query: storage.find.bind storage, entity
+		one: storage.findOne.bind storage, entity
+		get: storage.get.bind storage, entity
+		add: storage.insert.bind storage, entity
+		update: storage.update.bind storage, entity
+		remove: storage.remove.bind storage, entity
+	Object.defineProperty store, 'id', value: entity
+	store
+
+class Store
+	constructor: (entity) ->
+		@query = storage.find.bind storage, entity
+		@one = storage.findOne.bind storage, entity
+		@get = storage.get.bind storage, entity
+		@add = storage.insert.bind storage, entity
+		@update = storage.update.bind storage, entity
+		@remove = storage.remove.bind storage, entity
+		Object.defineProperty @, 'id', value: entity
+	where: (query) ->
+		@_query = parseQuery query
+		Object.defineProperty @_query, 'remove', value: () -> @remove @_query
+		Object.defineProperty @_query, 'update', value: (changes) -> @update @_query, changes
+		Object.defineProperty @_query, 'all', value: () -> @query @_query
+		Object.defineProperty @_query, 'one', value: () -> @one @_query
+		@_query
+
+#
+# put validating logic
+# - passed documents must obey schema's update/add flavors
+# - returned documents are filtered by schema's get flavor
+#
+applySchema = (store, schema) ->
+
+	filterBy = storage.filterBy #'active' # FIXME: dehardcode!!!
+
+	self =
+
+		add: (document, next) ->
+			self = @
+			document ?= {}
+			Step(
+				() ->
+					console.log 'BEFOREADD', document #, schema
+					# validate document
+					if schema
+						validate document, schema, {vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add'}, @
+						return
+					else
+						document
+				(err, document) ->
+					console.log 'ADDDDD', arguments
+					if err
+						next err
+						return
+					if filterBy
+						document[filterBy] = true
+					# update meta
+					document._meta =
+						creator: self?.user?.id
+					# insert document
+					store.add document, (err, result) ->
+						if err
+							next err
+							return
+						#console.log 'AFTERADD', arguments
+						# filter out protected fields
+						if schema
+							validate result, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
+						next null, result
+			)
+
+		update: (query, changes, next) ->
+			self = @
+			changes ?= {}
+			Step(
+				() ->
+					#console.log 'BEFOREUPDATE', query, changes, schema
+					# validate document
+					if schema
+						validate changes, schema, {vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update'}, @
+						return
+					else
+						changes
+				(err, changes) ->
+					if err
+						next err
+						return
+					# N.B. shortcut on empty changes
+					#console.log 'BEFOREUPDATEVALIDATED', query, changes
+					unless _.keys changes
+						next()
+						return
+					# update meta
+					changes._meta =
+						modifier: self?.user?.id
+					# update documents
+					store.update query, changes, @
+				(err, result) ->
+					#console.log 'AFTERUPDATE', arguments
+					next err, result
+			)
+
+		#updateOwn: (query, changes, next) ->
+		#	self.update.call @, _.rql(query).eq('_meta.history.0.who', @ and @user?.id), changes, next
+
+		query: (query, next) ->
+			console.log 'FIND?', query
+			if filterBy
+				query = _.rql(query).eq(filterBy,true)
+			console.log 'FIND!', query
+			store.query query, (err, result) ->
+				#console.log 'FOUND', arguments
+				if err
+					next err
+					return
+				# filter out protected fields
 				if schema
-					validate doc, schema, vetoReadOnly: true, flavor: 'get'
-				doc.id = doc._id
-				delete doc._id
-			next null, result
-	findOne: (query, next) ->
-		next ?= nop
-		query = parse query
-		return next URIError query.terms.search.error if query.terms.search.error
-		db.findOne collection, query.search, query.meta, (err, result) ->
-			#console.log 'FONE!', query, arguments
-			return next URIError err.message if err
-			result ?= null
-			if result
-				if schema
-					validate result, schema, vetoReadOnly: true, flavor: 'get'
-				result.id = result._id
-				delete result._id
-			next null, result
-	get: (id, next) ->
-		next ?= nop
-		return next null, null unless id
-		#@findOne collection, schema, "id=#{id}", next
-		@findOne collection, schema, "id=#{id}", (err, doc) ->
-			if doc
-				Object.defineProperty doc, 'save', value: (fn) ->
-					doc._id = doc.id
-					delete doc.id
-					db.modify collection, {query: {_id: doc._id}, update: doc, new: true}, (e, d) ->
-						console.log 'MODIFIED', doc, arguments
-						fn e, d if fn
-			next err, doc
-	remove: (query, next) ->
-		next ?= nop
-		query = parse query
-		# naive fuser
-		return next TypeError 'Use drop() instead to remove the whole collection' unless Object.keys(query.search).length
-		db.remove collection, query.search, (err, result) ->
-			return next URIError err.message if err
-			next null
+					for doc, k in result
+						validate doc, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
+				next null, result
+
+		#queryOwn: (query, next) ->
+		#	self.query.call @, _.rql(query).eq('_meta.history.0.who', @ and @user?.id), next
+
+		one: (query, next) ->
+			if filterBy
+				query = _.rql(query).eq(filterBy,true)
+			#console.log 'FONE?', query
+			store.one query, (err, result) ->
+				#console.log 'FONE!', query, arguments
+				if err
+					next err
+					return
+				result ?= null
+				# filter out protected fields
+				if schema and result
+					validate result, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
+				next null, result
+
+		get: (id, next) -> self.one.call @, _.rql().eq('id',id), next
+		_get: (id, next) -> store.get id, next
+
+		remove: (query, next) ->
+			if filterBy
+				query = _.rql(query).eq(filterBy,true)
+				changes = {}
+				changes[filterBy] = false
+				# update meta
+				changes._meta =
+					modifier: @ and @user?.id
+				# update documents
+				store.update query, changes, (err, result) ->
+					next err, result
+			else
+				store.remove query, (err, result) ->
+					next err, result
+
+		delete: (query, next) ->
+			store.remove query, (err, result) ->
+				next err, result
+
+		purge: (query, next) ->
+			if filterBy
+				query = _.rql(query).ne(filterBy,true)
+			store.remove query, (err, result) ->
+				next err, result
+
+		undelete: (query, next) ->
+			if filterBy
+				query = _.rql(query).ne(filterBy,true)
+				changes = {}
+				changes[filterBy] = true
+				# update meta
+				changes._meta =
+					modifier: @ and @user?.id
+				# update documents
+				store.update query, changes, (err, result) ->
+					next err, result
+			else
+				next 'Not implemented'
+
+		owned: (context, query) ->
+			if context?.user?.id then _.rql(query).eq('_meta.history.0.who', context?.user?.id) else _.rql(query)
 
 #########################################
 
@@ -212,6 +231,7 @@ Model = (db, entity, options, overrides...) ->
 	Object.defineProperty store, 'id', value: entity
 	Object.defineProperty store, 'schema', value: options.schema
 	Object.freeze Compose.create.apply Compose, [store].concat overrides
+
 
 #########################################
 
@@ -266,9 +286,11 @@ RestrictiveFacet = (model, options, expose...) ->
 
 #########################################
 
+'''
 module.exports =
 	Store: Store
 	Model: Model
 	Facet: Facet
 	RestrictiveFacet: RestrictiveFacet
 	PermissiveFacet: PermissiveFacet
+'''

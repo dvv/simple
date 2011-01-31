@@ -1,25 +1,32 @@
 ###
 	JSONSchema Validator - Validates JavaScript objects using JSON Schemas
 	(http://www.json.com/json-schema-proposal/)
+
 	Copyright (c) 2007 Kris Zyp SitePen (www.sitepen.com)
-Licensed under the MIT (MIT-LICENSE.txt) license.
-To use the validator call the validate function with an instance object and an optional schema object.
-If a schema is provided, it will be used to validate. If the instance object refers to a schema (self-validating),
-that schema will be used to validate and the schema parameter is not necessary (if both exist,
-both validations will occur).
-The validate method will return an array of validation errors. If there are no errors, then an
-empty list will be returned. A validation error will have two properties:
-"property" which indicates which property had the error
-"message" which indicates what the error was
+	Copyright (c) 2011 Vladimir Dronnikov dronnikov@gmail.com
+
+	Licensed under the MIT (MIT-LICENSE.txt) license
 ###
 
+#
+# TODO: relax "readonly"
+# TODO: on get it should _only_ delete readonly.get === true properties
+# TODO: on update it should not set defaults
+#
+
+#
+# N.B. since we allow "enum" attribute to be async, the whole validator is treated as async if callback is specified
+#
 module.exports = (instance, schema, options, callback) ->
 
 	options ?= {}
+	# FIXME: what it is?
 	_changing = options.changing
 
+	# pending validators
 	asyncs = []
 
+	# collected errors
 	errors = []
 
 	# validate a value against a property definition
@@ -64,7 +71,8 @@ module.exports = (instance, schema, options, callback) ->
 				if _.isArray type
 					unionErrors = []
 					for t in type # a union type
-						break unless (unionErrors=checkType(t, value)).length
+						unionErrors = checkType t, value
+						break unless unionErrors.length
 					return unionErrors if unionErrors.length
 				else if typeof type is 'object'
 					priorErrors = errors
@@ -111,11 +119,18 @@ module.exports = (instance, schema, options, callback) ->
 				if typeof schema.maximum isnt undefined and typeof value is typeof schema.maximum and schema.maximum < value
 					addError 'maximum'
 				if schema.enum
-					if typeof schema.enum is 'function'
-						asyncs.push value: value, path: path, fetch: schema.enum
+					enumeration = schema.enum
+					# if function specified, distinguish between async and sync flavors
+					if typeof enumeration is 'function'
+						# async validator
+						if enumeration.length is 2
+							asyncs.push value: value, path: path, fetch: enumeration
+						# sync getter
+						else
+							enumeration = enumeration()
+							addError 'enum' unless _.include enumeration, value
 					else
-						unless _.include schema.enum, value
-							addError 'enum'
+						addError 'enum' unless _.include enumeration, value
 				if typeof schema.maxDecimal is 'number' and (value.toString().match(new RegExp("\\.[0-9]{" + (schema.maxDecimal + 1) + ",}")))
 					addError 'digits'
 		null
@@ -141,32 +156,22 @@ module.exports = (instance, schema, options, callback) ->
 					value = instance[i] = options.coerce value, propDef
 				checkProp value, propDef, path, i
 
-		`
-		for(i in instance){
-			if(instance.hasOwnProperty(i) && objTypeDef && !objTypeDef[i] && (additionalProp===false || options.removeAdditionalProps)){
-				if (options.removeAdditionalProps) {
-					delete instance[i];
-					continue;
-				} else {
-					errors.push({property:path,message:"unspecifed"});
-				}
-			}
-			var requires = objTypeDef && objTypeDef[i] && objTypeDef[i].requires;
-			if(requires && !(requires in instance)){
-				errors.push({property:path,message:"requires"});
-			}
-			value = instance[i];
-			if(additionalProp && (!(objTypeDef && typeof objTypeDef == 'object') || !(i in objTypeDef))){
-				if(options.coerce){
-					value = instance[i] = options.coerce(value, additionalProp);
-				}
-				checkProp(value,additionalProp,path,i);
-			}
-			if(!_changing && value && value.$schema){
-				errors = errors.concat(checkProp(value,value.$schema,path,i));
-			}
-		}
-		`
+		for i, value of instance
+			if instance.hasOwnProperty(i) and objTypeDef and not objTypeDef[i] and (additionalProp is false or options.removeAdditionalProps)
+				if options.removeAdditionalProps
+					delete instance[i]
+					continue
+				else
+					errors.push property: path, message: 'unspecifed'
+			requires = objTypeDef and objTypeDef[i]?.requires
+			if requires && not requires in instance
+				errors.push property: path, message: 'requires'
+			if additionalProp and (not (objTypeDef and typeof objTypeDef is 'object') or not (i in objTypeDef))
+				if options.coerce
+					value = instance[i] = options.coerce value, additionalProp
+				checkProp value, additionalProp, path, i
+			if not _changing and value?.$schema
+				errors = errors.concat checkProp value, value.$schema, path, i
 		errors
 
 	if schema
@@ -174,16 +179,19 @@ module.exports = (instance, schema, options, callback) ->
 	if not _changing and instance?.$schema
 		checkProp instance, instance.$schema, '', ''
 
+	# run async validators
 	len = asyncs.length
-	if len
-		while asyncs.length
-			async = asyncs.pop()
-			value = async.value
-			async.fetch (err, values) ->
-				unless _.include(values, value)
-					errors.push property: async.path, message: 'enum'
-				len -= 1
-				unless len
-					callback errors.length and errors or null, instance
-	else
+	if callback and len
+		_.each asyncs, (async) ->
+			async.fetch async.value, (err) ->
+					if err
+						errors.push property: async.path, message: 'enum'
+					len -= 1
+					unless len
+						callback errors.length and errors or null, instance
+	else if callback
 		callback errors.length and errors or null, instance
+	else
+		return errors.length and errors or null
+
+	return

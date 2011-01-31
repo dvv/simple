@@ -296,20 +296,20 @@ module.exports.jsonrpc = (options) ->
 				#
 				#
 				call.method = [parts[0], call.method] unless parts[0] is ''
-				console.log 'CALL', call
+				#console.log 'CALL', call
 				fn = _.drill context, call.method
 				if fn
 					args = if Array.isArray call.params then call.params else [call.params]
 					args.push nextStep
 					if args.length isnt fn.length
 						return nextStep 406
-					console.log 'CALLING', args, fn.length
+					#console.log 'CALLING', args, fn.length
 					fn.apply context, args
 					return
 				else
 					nextStep 403
 			(err, result) ->
-				console.log 'RESULT', arguments
+				#console.log 'RESULT', arguments
 				#res.send err or result
 				response =
 					jsonrpc: '2.0'

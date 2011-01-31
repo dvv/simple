@@ -3,9 +3,8 @@
 #
 # Schema
 #
-Schema = require 'json-schema/lib/validate'
-global.validate = (instance, schema, options) ->
-	Schema._validate instance, schema, _.extend(options or {}, coerce: _.coerce)
+_validate = require './validate'
+global.validate = (instance, schema, options, next) -> _validate instance, schema, _.extend(options or {}, coerce: _.coerce), next
 
 #
 # Storage
@@ -18,13 +17,17 @@ module.exports = (options) ->
 	storage = new (require('./mongo').Storage) options
 	Object.freeze
 		onevent: storage.on.bind storage
-		Store: Store0
-		applySchema: applySchema
+		Store: Store
+		SecuredStore: SecuredStore
+		Model: Model
+		Facet: Facet
+		RestrictiveFacet: RestrictiveFacet
+		PermissiveFacet: PermissiveFacet
 
 #
 # Store -- set of DB accessor methods for a particular collection, bound to the db and the collection
 #
-Store0 = (entity) ->
+Store = (entity) ->
 	store =
 		query: storage.find.bind storage, entity
 		one: storage.findOne.bind storage, entity
@@ -35,84 +38,81 @@ Store0 = (entity) ->
 	Object.defineProperty store, 'id', value: entity
 	store
 
-class Store
-	constructor: (entity) ->
-		@query = storage.find.bind storage, entity
-		@one = storage.findOne.bind storage, entity
-		@get = storage.get.bind storage, entity
-		@add = storage.insert.bind storage, entity
-		@update = storage.update.bind storage, entity
-		@remove = storage.remove.bind storage, entity
-		Object.defineProperty @, 'id', value: entity
-	where: (query) ->
-		@_query = parseQuery query
-		Object.defineProperty @_query, 'remove', value: () -> @remove @_query
-		Object.defineProperty @_query, 'update', value: (changes) -> @update @_query, changes
-		Object.defineProperty @_query, 'all', value: () -> @query @_query
-		Object.defineProperty @_query, 'one', value: () -> @one @_query
-		@_query
-
 #
 # put validating logic
 # - passed documents must obey schema's update/add flavors
 # - returned documents are filtered by schema's get flavor
 #
-applySchema = (store, schema) ->
+SecuredStore = (store, schema) ->
 
 	filterBy = storage.filterBy #'active' # FIXME: dehardcode!!!
 
 	self =
 
 		add: (document, next) ->
+			self = @
 			document ?= {}
-			#console.log 'BEFOREADD', document, schema
-			# validate document
-			if schema
-				validation = validate document, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add'
-				if not validation.valid
-					next validation.errors
-					return
-			if filterBy
-				document[filterBy] = true
-			# update meta
-			document._meta =
-				creator: @ and @user?.id
-			# insert document
-			store.add document, (err, result) ->
-				if err
-					next err
-					return
-				#console.log 'AFTERADD', arguments
-				# filter out protected fields
-				if schema
-					validate result, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
-				next null, result
+			Step(
+				() ->
+					#console.log 'BEFOREADD', document #, schema
+					# validate document
+					if schema
+						validate document, schema, {vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add'}, @
+						return
+					else
+						document
+				(err, document) ->
+					#console.log 'ADDDDD', arguments
+					if err
+						next err
+						return
+					if filterBy
+						document[filterBy] = true
+					# update meta
+					document._meta =
+						creator: self?.user?.id
+					# insert document
+					store.add document, (err, result) ->
+						if err
+							next err
+							return
+						#console.log 'AFTERADD', arguments
+						# filter out protected fields
+						if schema
+							validate result, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
+						next null, result
+			)
 
 		update: (query, changes, next) ->
+			self = @
 			changes ?= {}
-			#console.log 'BEFOREUPDATE', query, changes, schema
-			# validate document
-			if schema
-				validation = validate changes, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update'
-				if not validation.valid
-					next validation.errors
-					return
-			#
-			# TODO: shortcut on empty changes!
-			#
-			#console.log 'BEFOREUPDATEVALIDATED', query, changes
-			return next() unless _.keys changes
-			#
-			#
-			# update meta
-			changes._meta =
-				modifier: @ and @user?.id
-			# update documents
-			#console.log 'STOREUPD1', query
-			store.update query, changes, (err, result) ->
-				#console.log 'AFTERUPDATE', arguments
-				next err, result
-			#console.log 'STOREUPD2', query
+			Step(
+				() ->
+					#console.log 'BEFOREUPDATE', query, changes, schema
+					# validate document
+					if schema
+						validate changes, schema, {vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update'}, @
+						return
+					else
+						changes
+				(err, changes) ->
+					if err
+						next err
+						return
+					# N.B. shortcut on empty changes
+					#console.log 'BEFOREUPDATEVALIDATED', query, changes
+					unless _.keys changes
+						next()
+						return
+					# update meta
+					changes._meta =
+						modifier: self?.user?.id
+					# update documents
+					store.update query, changes, @
+				(err, result) ->
+					#console.log 'AFTERUPDATE', arguments
+					next err, result
+			)
 
 		#updateOwn: (query, changes, next) ->
 		#	self.update.call @, _.rql(query).eq('_meta.history.0.who', @ and @user?.id), changes, next
@@ -196,6 +196,8 @@ applySchema = (store, schema) ->
 		owned: (context, query) ->
 			if context?.user?.id then _.rql(query).eq('_meta.history.0.who', context?.user?.id) else _.rql(query)
 
+	self
+
 #########################################
 
 #
@@ -225,20 +227,6 @@ Model = (db, entity, options, overrides...) ->
 #
 # Model -- set of overloaded Store methods plus business logic
 #
-'''
-Model = (entity, store, options, overrides) ->
-	model = Compose.create store or Store(entity, options), overrides
-	Object.defineProperty model, 'where', value: (query) ->
-		q = parseQuery query
-		Object.defineProperty q, 'add', value: (doc) -> model.add q, doc
-		Object.defineProperty q, 'remove', value: () -> model.remove q
-		Object.defineProperty q, 'update', value: (changes) -> model.update q, changes
-		Object.defineProperty q, 'all', value: () -> model.all q
-		Object.defineProperty q, 'one', value: () -> model.one q
-		q
-	Object.freeze model
-Model = Store
-'''
 
 #########################################
 
@@ -265,19 +253,8 @@ Facet = (model, options, expose) ->
 
 # expose collection accessors plus enlisted model methods
 PermissiveFacet = (model, options, expose...) ->
-	Facet model, options, ['all', 'get', 'add', 'update', 'remove'].concat(expose or [])
+	Facet model, options, ['query', 'get', 'add', 'update', 'remove'].concat(expose or [])
 
 # expose only collection _getters_ plus enlisted model methods
 RestrictiveFacet = (model, options, expose...) ->
-	Facet model, options, ['all', 'get'].concat(expose or [])
-
-#########################################
-
-'''
-module.exports =
-	Store: Store
-	Model: Model
-	Facet: Facet
-	RestrictiveFacet: RestrictiveFacet
-	PermissiveFacet: PermissiveFacet
-'''
+	Facet model, options, ['query', 'get'].concat(expose or [])
