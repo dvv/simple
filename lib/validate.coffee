@@ -69,8 +69,9 @@ module.exports = (instance, schema, options, callback) ->
 						!(type == 'integer' && value%1===0)`
 					return [property: path, message: 'type']
 				if _.isArray type
+					# a union type
 					unionErrors = []
-					for t in type # a union type
+					for t in type
 						unionErrors = checkType t, value
 						break unless unionErrors.length
 					return unionErrors if unionErrors.length
@@ -130,6 +131,7 @@ module.exports = (instance, schema, options, callback) ->
 							enumeration = enumeration()
 							addError 'enum' unless _.include enumeration, value
 					else
+						# simple array
 						addError 'enum' unless _.include enumeration, value
 				if typeof schema.maxDecimal is 'number' and (value.toString().match(new RegExp("\\.[0-9]{" + (schema.maxDecimal + 1) + ",}")))
 					addError 'digits'
@@ -149,9 +151,12 @@ module.exports = (instance, schema, options, callback) ->
 				if options.vetoReadOnly and (propDef.readonly is true or typeof propDef.readonly is 'object' and propDef.readonly[options.flavor])
 					delete instance[i]
 					continue
-				# set default
-				if value is undefined and propDef.default and options.flavor isnt 'get'
+				# done with validation if it is called for 'get'
+				continue if options.flavor is 'get'
+				# set default if validation called for 'add'
+				if value is undefined and propDef.default? and options.flavor is 'add'
 					value = instance[i] = propDef.default
+				# coerce if coercion is enabled
 				if options.coerce and i in instance
 					value = instance[i] = options.coerce value, propDef
 				checkProp value, propDef, path, i
@@ -163,8 +168,8 @@ module.exports = (instance, schema, options, callback) ->
 					continue
 				else
 					errors.push property: path, message: 'unspecifed'
-			requires = objTypeDef and objTypeDef[i]?.requires
-			if requires && not requires in instance
+			requires = objTypeDef?[i]?.requires
+			if requires and not requires in instance
 				errors.push property: path, message: 'requires'
 			if additionalProp and (not (objTypeDef and typeof objTypeDef is 'object') or not (i in objTypeDef))
 				if options.coerce
@@ -176,10 +181,11 @@ module.exports = (instance, schema, options, callback) ->
 
 	if schema
 		checkProp instance, schema, '', _changing or ''
+
 	if not _changing and instance?.$schema
 		checkProp instance, instance.$schema, '', ''
 
-	# run async validators
+	# run async validators, if any
 	len = asyncs.length
 	if callback and len
 		_.each asyncs, (async) ->
@@ -187,6 +193,7 @@ module.exports = (instance, schema, options, callback) ->
 					if err
 						errors.push property: async.path, message: 'enum'
 					len -= 1
+					# proceed when async validators are done
 					unless len
 						callback errors.length and errors or null, instance
 	else if callback

@@ -16,7 +16,6 @@ Object.defineProperty Step, 'nop', value: () ->
 #
 # expose Object helpers
 #
-global.Compose = require 'compose'
 global._ = require 'underscore'
 require './U.obj'
 

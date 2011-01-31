@@ -161,6 +161,9 @@ module.exports.authCookie = (options) ->
 						#console.log 'SESSKILL'
 						res.clearCookie cookie, cookieOptions
 					callback()
+				# freeze the context
+				Object.freeze context
+				#
 				next()
 	else
 		(req, res, next) ->

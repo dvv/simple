@@ -219,7 +219,7 @@ Model = (db, entity, options, overrides...) ->
 		remove: storage.remove.bind storage, entity
 	Object.defineProperty store, 'id', value: entity
 	Object.defineProperty store, 'schema', value: options.schema
-	Object.freeze Compose.create.apply Compose, [store].concat overrides
+	Object.freeze _.extend.apply {}, [store].concat overrides
 
 
 #########################################
@@ -240,7 +240,7 @@ Facet = (model, options, expose) ->
 	facet = {}
 	facet.schema = model.schema if model.schema
 	expose and expose.forEach (definition) ->
-		if Array.isArray definition
+		if _.isArray definition
 			name = definition[1]
 			method = definition[0]
 			method = model[method] if typeof method is 'string'

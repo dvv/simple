@@ -7,6 +7,10 @@ _.mixin require './rql'
 # _.drill({a:{b:{c:[0,2,4]}}},['a','b','c',2]) ---> 4
 # _.drill({a:{b:{get:function(attr){return{c:[0,2,4]}[attr];}}}},['a','b','c',2]) ---> 4
 _.mixin
+
+	#
+	# drill down object properties specified by path
+	#
 	drill: (obj, path) ->
 		_drill = (obj, path) ->
 			return obj unless obj and path?
@@ -22,6 +26,7 @@ _.mixin
 				#obj.get and obj.get(attr) or obj[attr]
 				obj[attr]
 		_drill obj, path
+
 	# kick off properties mentioned in fields from obj
 	# FIXME: should be just schema!
 	veto: (obj, fields) ->
@@ -36,4 +41,15 @@ _.mixin
 					obj[k1] = v1.map (x) -> _.veto(x, if k.length > 1 then [k] else k)
 				else if v1
 					obj[k1] = _.veto(v1, if k.length > 1 then [k] else k)
+		obj
+
+	#
+	# deep freeze an object
+	#
+	freeze: (obj) ->
+		if obj and typeof obj is 'object'
+			#console.log 'FREEZING', obj
+			Object.freeze obj
+			_.each obj, (v, k) ->
+				_.freeze v
 		obj

@@ -94,7 +94,7 @@ module.exports = (handler, options) ->
 			# we can pass some config to worker
 			conf = {}
 			# pass worker master socket
-			worker.comm.write JSON.stringify(conf), 'ascii', socket
+			worker.comm.write JSON.stringify(conf), 'utf8', socket
 			# put worker to the slot
 			workers[id] = worker
 
