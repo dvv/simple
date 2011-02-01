@@ -186,9 +186,8 @@ module.exports.jsonrpc = (options) ->
 
 	(req, res, next) ->
 
-		Step(
-			() ->
-				nextStep = @
+		Next {},
+			(err, result, step) ->
 				if (req.method is 'POST' or req.method is 'PUT')  and req.headers['content-type'].split(';')[0] is 'application/json'
 					req.params = {}
 					body = ''
@@ -196,33 +195,27 @@ module.exports.jsonrpc = (options) ->
 						body += chunk.toString 'utf8'
 						# fuser not to exhaust memory
 						if body.length > options.maxBodyLength > 0
-							nextStep 'Length exceeded'
+							step 'Length exceeded'
 					req.on 'end', () ->
 						try
 							# TODO: use kriszyp's one to relax accepted formatting?
 							req.params = JSON.parse body
-							nextStep()
+							step()
 						catch x
-							nextStep x.message
-					return
+							step x.message
 				else
 					null
-			(err) ->
-				console.log 'PARSEDBODY', err, req.params
-				nextStep = @
+			(err, xxx, step) ->
+				console.log 'PARSEDBODY', req.params
 				# pass errors to serializer
-				if err
-					nextStep err
-					return
+				return step err if err
 				#
 				# parse the query
 				#
 				search = req.location.search or ''
 				query = _.rql search
 				#console.log 'QUERY', query
-				if query.error
-					nextStep query.error
-					return
+				return step query.error if query.error
 				#
 				# find the method which will handle the request
 				#
@@ -299,18 +292,18 @@ module.exports.jsonrpc = (options) ->
 				#
 				#
 				call.method = [parts[0], call.method] unless parts[0] is ''
-				#console.log 'CALL', call
+				console.log 'CALL', call
 				fn = _.drill context, call.method
 				if fn
 					args = if Array.isArray call.params then call.params else [call.params]
-					args.push nextStep
+					args.push step
 					if args.length isnt fn.length
-						return nextStep 406
-					#console.log 'CALLING', args, fn.length
+						return step 406
+					console.log 'CALLING', args, fn.length
 					fn.apply context, args
 					return
 				else
-					nextStep 403
+					step 403
 			(err, result) ->
 				#console.log 'RESULT', arguments
 				#res.send err or result
@@ -327,7 +320,6 @@ module.exports.jsonrpc = (options) ->
 				#res.headers['content-type'] = 'application/json-rpc; charset=utf-8'
 				#next null, response
 				res.send response, 'content-type': 'application/json-rpc; charset=utf-8'
-		)
 
 #
 # bind a handler to a location, and optionally HTTP verb

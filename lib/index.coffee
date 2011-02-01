@@ -10,8 +10,17 @@
 #
 # flow
 #
-global.Step = require 'step'
-Object.defineProperty Step, 'nop', value: () ->
+global.Next = (context, steps...) ->
+	next = (err, result) ->
+		throw err if not steps.length and err
+		fn = steps.shift()
+		try
+			fn.call context, err, result, next
+		catch err
+			next err
+		return context
+	next()
+Object.defineProperty Next, 'nop', value: () ->
 
 #
 # expose Object helpers

@@ -52,20 +52,17 @@ SecuredStore = (store, schema) ->
 		add: (document, next) ->
 			self = @
 			document ?= {}
-			Step(
-				() ->
+			Next self,
+				(err, result, step) ->
 					#console.log 'BEFOREADD', document #, schema
 					# validate document
 					if schema
-						validate document, schema, {vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add'}, @
-						return
+						validate document, schema, {vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add'}, step
 					else
-						document
-				(err, document) ->
+						step null, document
+				(err, document, step) ->
 					#console.log 'ADDDDD', arguments
-					if err
-						next err
-						return
+					return next err if err
 					if filterBy
 						document[filterBy] = true
 					# update meta
@@ -73,47 +70,38 @@ SecuredStore = (store, schema) ->
 						creator: self?.user?.id
 					# insert document
 					store.add document, (err, result) ->
-						if err
-							next err
-							return
+						return next err if err
 						#console.log 'AFTERADD', arguments
 						# filter out protected fields
 						if schema
 							validate result, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 						next null, result
-			)
 
 		update: (query, changes, next) ->
 			self = @
 			changes ?= {}
-			Step(
-				() ->
+			Next self,
+				(err, result, step) ->
 					#console.log 'BEFOREUPDATE', query, changes, schema
 					# validate document
 					if schema
-						validate changes, schema, {vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update'}, @
-						return
+						validate changes, schema, {vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update'}, step
 					else
-						changes
-				(err, changes) ->
+						step null, changes
+				(err, changes, step) ->
 					#console.log 'BEFOREUPDATEVALIDATED', arguments
-					if err
-						next err
-						return
+					return step err if err
 					# N.B. shortcut on empty changes
 					#console.log 'BEFOREUPDATEVALIDATED', query, changes
-					unless _.keys changes
-						next()
-						return
+					return step() unless _.keys changes
 					# update meta
 					changes._meta =
 						modifier: self?.user?.id
 					# update documents
-					store.update query, changes, @
+					store.update query, changes, step
 				(err, result) ->
 					#console.log 'AFTERUPDATE', arguments
 					next err, result
-			)
 
 		#updateOwn: (query, changes, next) ->
 		#	secured.update.call @, _.rql(query).eq('_meta.history.0.who', @ and @user?.id), changes, next
