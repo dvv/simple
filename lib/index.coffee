@@ -3,9 +3,9 @@
 #
 # improve console.log
 #
-inspect = require('eyes.js').inspector stream: null
-consoleLog = console.log
-console.log = () -> consoleLog inspect arg for arg in arguments
+#inspect = require('eyes.js').inspector stream: null
+#consoleLog = console.log
+#console.log = () -> consoleLog inspect arg for arg in arguments
 
 #
 # flow

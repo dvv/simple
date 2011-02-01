@@ -47,7 +47,7 @@ SecuredStore = (store, schema) ->
 
 	filterBy = storage.filterBy #'active' # FIXME: dehardcode!!!
 
-	self =
+	secured =
 
 		add: (document, next) ->
 			self = @
@@ -96,6 +96,7 @@ SecuredStore = (store, schema) ->
 					else
 						changes
 				(err, changes) ->
+					#console.log 'BEFOREUPDATEVALIDATED', arguments
 					if err
 						next err
 						return
@@ -115,7 +116,7 @@ SecuredStore = (store, schema) ->
 			)
 
 		#updateOwn: (query, changes, next) ->
-		#	self.update.call @, _.rql(query).eq('_meta.history.0.who', @ and @user?.id), changes, next
+		#	secured.update.call @, _.rql(query).eq('_meta.history.0.who', @ and @user?.id), changes, next
 
 		query: (query, next) ->
 			console.log 'FIND?', query
@@ -134,14 +135,14 @@ SecuredStore = (store, schema) ->
 				next null, result
 
 		#queryOwn: (query, next) ->
-		#	self.query.call @, _.rql(query).eq('_meta.history.0.who', @ and @user?.id), next
+		#	secured.query.call @, _.rql(query).eq('_meta.history.0.who', @ and @user?.id), next
 
 		one: (query, next) ->
 			if filterBy
 				query = _.rql(query).eq(filterBy,true)
 			#console.log 'FONE?', query
 			store.one query, (err, result) ->
-				#console.log 'FONE!', query, arguments
+				#console.log 'FONE!', arguments
 				if err
 					next err
 					return
@@ -151,7 +152,7 @@ SecuredStore = (store, schema) ->
 					validate result, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 				next null, result
 
-		get: (id, next) -> self.one.call @, _.rql().eq('id',id), next
+		get: (id, next) -> secured.one.call @, _.rql().eq('id',id), next
 		_get: (id, next) -> store.get id, next
 
 		remove: (query, next) ->
@@ -196,7 +197,7 @@ SecuredStore = (store, schema) ->
 		owned: (context, query) ->
 			if context?.user?.id then _.rql(query).eq('_meta.history.0.who', context?.user?.id) else _.rql(query)
 
-	self
+	secured
 
 #########################################
 

@@ -101,13 +101,14 @@ class Storage extends events.EventEmitter
 
 	findOne: (collection, query, next) ->
 		next ?= nop
+		#console.log 'FONE???', collection, query
 		query = _.rql(query)
 		return next query.error if query.error
 		query = query.toMongo()
 		#console.log 'FONE?', query
 		self = @
 		@db.findOne collection, query.search, query.meta, (err, result) ->
-			#console.log 'FONE!', arguments
+			#console.log 'FONE!', next
 			if result
 				result.id = result._id
 				delete result._id
