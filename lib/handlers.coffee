@@ -78,7 +78,7 @@ module.exports.body = (options) ->
 #
 # decode request JSON body
 #
-module.exports.jsonBody123123123 = (options) ->
+module.exports.jsonBody = (options) ->
 
 	options ?= {}
 
@@ -91,14 +91,15 @@ module.exports.jsonBody123123123 = (options) ->
 				body += chunk.toString 'utf8'
 				# fuser not to exhaust memory
 				if body.length > options.maxLength > 0
-					next TypeError 'Max length exceeded'
+					req.params = 'Length exceeded'
+					next()
 			req.on 'end', () ->
 				try
 					# TODO: use kriszyp's one?
 					req.params = JSON.parse body
-					next()
 				catch x
-					next SyntaxError x.message
+					req.params = x.message
+				next()
 		else
 			next()
 
@@ -151,20 +152,21 @@ module.exports.authCookie = (options) ->
 				#req.remember = (session) ->
 				Object.defineProperty context, 'remember', value: (session, callback) ->
 					cookieOptions = path: '/', httpOnly: true
-					if session and session isnt true
+					if typeof session is 'object'
 						#console.log 'SESSSET', session
 						# set the cookie
 						cookieOptions.expires = session.expires if session.expires
 						res.setSecureCookie cookie, session.uid, cookieOptions
+						callback null, true
 					else
-						req.context = user: {}
 						#console.log 'SESSKILL'
 						res.clearCookie cookie, cookieOptions
-					callback()
+						callback (if session isnt true then session else null), session is true
 				# freeze the context
 				Object.freeze context
 				#
 				next()
+
 	else
 		(req, res, next) ->
 			# fake user
@@ -187,28 +189,10 @@ module.exports.jsonrpc = (options) ->
 	(req, res, next) ->
 
 		Next {},
-			(err, result, step) ->
-				if (req.method is 'POST' or req.method is 'PUT')  and req.headers['content-type'].split(';')[0] is 'application/json'
-					req.params = {}
-					body = ''
-					req.on 'data', (chunk) ->
-						body += chunk.toString 'utf8'
-						# fuser not to exhaust memory
-						if body.length > options.maxBodyLength > 0
-							step 'Length exceeded'
-					req.on 'end', () ->
-						try
-							# TODO: use kriszyp's one to relax accepted formatting?
-							req.params = JSON.parse body
-							step()
-						catch x
-							step x.message
-				else
-					null
-			(err, xxx, step) ->
-				console.log 'PARSEDBODY', req.params
+			(xxx, yyy, step) ->
+				#console.log 'PARSEDBODY', req.params
 				# pass errors to serializer
-				return step err if err
+				return step err if typeof req.params is 'string' 
 				#
 				# parse the query
 				#
@@ -252,7 +236,7 @@ module.exports.jsonrpc = (options) ->
 					if parts[1]
 						call.params = [[parts[1]], data]
 				else if method is 'POST'
-					if data.jsonrpc and data.method
+					if data.jsonrpc # and data.method
 						call = data
 						#
 						# POST / {method: M, params: P,...} --> context[M].apply context, P
@@ -291,7 +275,8 @@ module.exports.jsonrpc = (options) ->
 				# descend into context own properties
 				#
 				#
-				call.method = [parts[0], call.method] unless parts[0] is ''
+				if parts[0] isnt ''
+					call.method = if call.method then [parts[0], call.method] else [parts[0]]
 				console.log 'CALL', call
 				fn = _.drill context, call.method
 				if fn
@@ -305,7 +290,7 @@ module.exports.jsonrpc = (options) ->
 				else
 					step 403
 			(err, result) ->
-				#console.log 'RESULT', arguments
+				console.log 'RESULT', arguments
 				#res.send err or result
 				response =
 					jsonrpc: '2.0'
@@ -315,7 +300,7 @@ module.exports.jsonrpc = (options) ->
 				else if result is null
 					response.error = 404
 				else
-					response.result = result or true
+					response.result = result? or true
 				# respond
 				#res.headers['content-type'] = 'application/json-rpc; charset=utf-8'
 				#next null, response
