@@ -188,8 +188,10 @@ module.exports = (instance, schema, options, callback) ->
 	# run async validators, if any
 	len = asyncs.length
 	if callback and len
-		_.each asyncs, (async) ->
-			async.fetch async.value, (err) ->
+		#_.each asyncs, (async) ->
+		for i in asyncs
+			do (async) ->
+				async.fetch async.value, (err) ->
 					if err
 						errors.push property: async.path, message: 'enum'
 					len -= 1

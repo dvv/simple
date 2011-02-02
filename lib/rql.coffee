@@ -214,6 +214,9 @@ class Query
 
 		search = walk @name, @args
 		#console.log meta: options, search: search, terms: query
+		if options.select
+			options.fields = options.select
+			delete options.select
 		meta: options, search: search
 
 stringToValue = (string, parameters) ->

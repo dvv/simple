@@ -107,10 +107,10 @@ SecuredStore = (store, schema) ->
 		#	secured.update.call @, _.rql(query).eq('_meta.history.0.who', @ and @user?.id), changes, next
 
 		query: (query, next) ->
-			console.log 'FIND?', query
+			#console.log 'FIND?', query
 			if filterBy
 				query = _.rql(query).eq(filterBy,true)
-			console.log 'FIND!', query
+			#console.log 'FIND!', query
 			store.query query, (err, result) ->
 				#console.log 'FOUND', arguments
 				if err
@@ -177,6 +177,7 @@ SecuredStore = (store, schema) ->
 				changes._meta =
 					modifier: @ and @user?.id
 				# update documents
+				#console.log 'UNDELETE', query, changes
 				store.update query, changes, (err, result) ->
 					next err, result
 			else
@@ -242,7 +243,7 @@ Facet = (model, options, expose) ->
 
 # expose collection accessors plus enlisted model methods
 PermissiveFacet = (model, options, expose...) ->
-	Facet model, options, ['query', 'get', 'add', 'update', 'remove'].concat(expose or [])
+	Facet model, options, ['query', 'get', 'add', 'update', 'remove', 'delete', 'undelete'].concat(expose or [])
 
 # expose only collection _getters_ plus enlisted model methods
 RestrictiveFacet = (model, options, expose...) ->

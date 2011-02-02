@@ -192,7 +192,7 @@ module.exports.jsonrpc = (options) ->
 			(xxx, yyy, step) ->
 				#console.log 'PARSEDBODY', req.params
 				# pass errors to serializer
-				return step err if typeof req.params is 'string' 
+				return step err if typeof req.params is 'string'
 				#
 				# parse the query
 				#
@@ -300,7 +300,7 @@ module.exports.jsonrpc = (options) ->
 				else if result is null
 					response.error = 404
 				else
-					response.result = result? or true
+					response.result = result? and result or true
 				# respond
 				#res.headers['content-type'] = 'application/json-rpc; charset=utf-8'
 				#next null, response

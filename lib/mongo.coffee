@@ -81,6 +81,7 @@ class Storage extends events.EventEmitter
 		return next query.error if query.error
 		#console.log 'FIND!', query.search
 		query = query.toMongo()
+		#console.log 'FIND!!', query
 		# limit the limit
 		#query.meta.limit = @limit if @limit < query.meta.limit
 		self = @
@@ -90,7 +91,7 @@ class Storage extends events.EventEmitter
 				doc.id = doc._id
 				delete doc._id
 				if query.meta.toArray
-					doc = _.toArray doc
+					result[i] = _.toArray doc
 			if self.events is true or self.events?.find
 				self.emit 'find',
 					collection: collection
