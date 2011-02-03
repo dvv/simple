@@ -12,7 +12,9 @@ console.log = () -> consoleLog inspect arg for arg in arguments
 #
 global.Next = (context, steps...) ->
 	next = (err, result) ->
-		throw err if not steps.length and err
+		if not steps.length
+			throw err if err
+			return
 		fn = steps.shift()
 		try
 			fn.call context, err, result, next

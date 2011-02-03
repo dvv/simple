@@ -142,7 +142,8 @@ class Query
 						pm = plusMinus[func]
 						options[func] = {}
 						# substitute _id for id
-						args = _.map args, (x) -> if x is 'id' or x is '-id' or x is '+id' then '_id' else x
+						args = _.map args, (x) -> if x is 'id' or x is '+id' then '_id' else x
+						args = _.map args, (x) -> if x is '-id' then '-_id' else x
 						_.each args, (x, index) ->
 							x = x.join('.') if _.isArray x
 							a = /([-+]*)(.+)/.exec x
