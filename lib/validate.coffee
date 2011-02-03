@@ -100,7 +100,7 @@ module.exports = (instance, schema, options, callback) ->
 							if itemsIsArray
 								propDef = schema.items[i]
 							if options.coerce
-								value[i] = options.coerce v, propDef
+								value[i] = options.coerce v, propDef.type
 							errors.concat checkProp v, propDef, path, i
 					if schema.minItems and value.length < schema.minItems
 						addError 'minItems'
@@ -157,8 +157,9 @@ module.exports = (instance, schema, options, callback) ->
 				if value is undefined and propDef.default? and options.flavor is 'add'
 					value = instance[i] = propDef.default
 				# coerce if coercion is enabled
-				if options.coerce and i in instance
-					value = instance[i] = options.coerce value, propDef
+				if options.coerce and i of instance
+					value = options.coerce value, propDef.type
+					instance[i] = value
 				checkProp value, propDef, path, i
 
 		for i, value of instance
@@ -169,11 +170,12 @@ module.exports = (instance, schema, options, callback) ->
 				else
 					errors.push property: path, message: 'unspecifed'
 			requires = objTypeDef?[i]?.requires
-			if requires and not requires in instance
+			if requires and not requires of instance
 				errors.push property: path, message: 'requires'
-			if additionalProp and (not (objTypeDef and typeof objTypeDef is 'object') or not (i in objTypeDef))
+			if additionalProp and (not (objTypeDef and typeof objTypeDef is 'object') or not (i of objTypeDef))
 				if options.coerce
-					value = instance[i] = options.coerce value, additionalProp
+					value = options.coerce value, additionalProp.type
+					instance[i] = value
 				checkProp value, additionalProp, path, i
 			if not _changing and value?.$schema
 				errors = errors.concat checkProp value, value.$schema, path, i
