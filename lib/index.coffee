@@ -13,8 +13,9 @@ console.log = () -> consoleLog inspect arg for arg in arguments
 global.Next = (context, steps...) ->
 	next = (err, result) ->
 		unless steps.length
+			#console.log 'LAST', err
 			throw err if err
-			return
+			return context
 		fn = steps.shift()
 		try
 			fn.call context, err, result, next

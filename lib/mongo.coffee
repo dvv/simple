@@ -81,7 +81,7 @@ class Storage extends events.EventEmitter
 		return next query.error if query.error
 		#console.log 'FIND!', query.search
 		query = query.toMongo()
-		#console.log 'FIND!!', query
+		console.log 'FIND!!', query
 		# limit the limit
 		#query.meta.limit = @limit if @limit < query.meta.limit
 		self = @
