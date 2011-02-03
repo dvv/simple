@@ -191,7 +191,7 @@ module.exports = (instance, schema, options, callback) ->
 	len = asyncs.length
 	if callback and len
 		#_.each asyncs, (async) ->
-		for i in asyncs
+		for async, i in asyncs
 			do (async) ->
 				async.fetch async.value, (err) ->
 					if err
