@@ -12,18 +12,36 @@ console.log = () -> consoleLog inspect arg for arg in arguments
 #
 global.Next = (context, steps...) ->
 	next = (err, result) ->
-		unless steps.length
-			#console.log 'LAST', err
-			throw err if err
-			return context
+		# N.B. only simple steps are supported -- no next.group() and next.parallel() as in Step
 		fn = steps.shift()
-		try
-			fn.call context, err, result, next
-		catch err
-			next err
-		return context
+		if fn
+			try
+				fn.call context, err, result, next
+			catch err
+				next err
+		else
+			throw err if err
+		return
 	next()
 Object.defineProperty Next, 'nop', value: () ->
+
+global.All = (context, steps...) ->
+	next = (err, result) ->
+		throw err if err
+		# N.B. only simple steps are supported -- no next.group() and next.parallel() as in Step
+		fn = steps.shift()
+		if fn
+			try
+				fn.call context, err, result, next
+			catch err
+				console.log 'FATAL: ' + err #err?.message or err
+				process.exit 1
+		else
+			if err
+				console.log 'FATAL: ' + err #err?.message or err
+				process.exit 1
+		context
+	next()
 
 #
 # expose Object helpers
@@ -42,5 +60,6 @@ require './request'
 require './response'
 
 module.exports =
+	Database: require './database'
 	run: require './server'
 	handlers: require './handlers'

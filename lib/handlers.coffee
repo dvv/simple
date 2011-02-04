@@ -281,11 +281,12 @@ module.exports.jsonrpc = (options) ->
 				fn = _.drill context, call.method
 				if fn
 					args = if Array.isArray call.params then call.params else [call.params]
+					args.unshift context
 					args.push step
 					if args.length isnt fn.length
 						return step 406
 					console.log 'CALLING', args, fn.length
-					fn.apply context, args
+					fn.apply null, args
 					return
 				else
 					step 403

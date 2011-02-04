@@ -1,248 +1,312 @@
-#!/usr/bin/env coffee
 'use strict'
-
-require.paths.unshift __dirname + '/lib/node'
-global._ = require 'underscore'
-
-_.mixin
-	rql: require('jse/rql').rql
-
-inspect = require('eyes.js').inspector stream: null
-consoleLog = console.log
-console.log = () -> consoleLog inspect arg for arg in arguments
-
-Next = (context, steps...) ->
-	next = (err, result) ->
-		unless steps.length
-			throw err if err
-			return
-		fn = steps.shift()
-		try
-			fn.call context, err, result, next
-		catch err
-			next err
-		return context
-	next()
-
-###
-a = () -> Next {foo: 'bar'},
-	(err, result, next) ->
-		console.log 'first', arguments
-		return next err if err
-		#throw 'Catch me1!'
-		next 'err1', 'res1'
-	(err, result, next) ->
-		console.log 'second', arguments
-		return next err if err
-		next 'err2', 'res2'
-	(err, result, next) ->
-		console.log 'third', arguments
-		return next err if err
-		next 'err3', 'res3'
-
-try
-	console.log 'A', a()
-catch err
-	console.log 'CAUGHT', err
-###
 
 parseUrl = require('url').parse
 mongo = require 'mongodb'
 events = require 'events'
 
-#
-# TODO:
-# 3. schema
-
 class Database extends events.EventEmitter
 
-	constructor: (@url) ->
-		conn = parseUrl @url
-		@host = conn.hostname
-		@port = +conn.port if conn.port
-		@auth = conn.auth if conn.auth # FIXME: what is options analog?
-		@name = conn.pathname.substring(1) if conn.pathname
+	constructor: (options, definitions, callback) ->
+		options ?= {}
+		# we connect by URL
+		conn = parseUrl options.url or ''
+		host = conn.hostname
+		port = +conn.port if conn.port
+		@auth = conn.auth if conn.auth # FIXME: should not sit in @
+		name = conn.pathname.substring(1) if conn.pathname
+		# cache of collections
 		@collections = {}
-		@idFactory = () ->
-			(new mongo.BSONPure.ObjectID).toHexString()
-		@db = new mongo.Db @name, new mongo.Server(@host, @port)
+		# model -- collection of registered entities
+		@model = {}
+		# primary key factory
+		@idFactory = () -> (new mongo.BSONPure.ObjectID).toHexString()
+		# attribute to be used to mark document as deleted
+		@attrInactive = '_deleted'
+		# DB connection
+		@db = new mongo.Db name or 'test', new mongo.Server(host or '127.0.0.1', port or 27017) #, native_parser: true
+		# register schema
+		@open definitions, callback if definitions
 
+	###########
+	# N.B. all methods should return undefined, so to prevent leak of private info
+	###########
+
+	#
+	# connect to DB, optionally authenticate, cache collections named after `collections[]`
+	#
 	open: (collections, callback) ->
 		self = @
-		register = (callback) ->
-			len = collections.length
-			for name in collections
-				do (name) ->
-					self.db.collection name, (err, coll) ->
-						self.collections[name] = coll
-						# TODO: may init indexes here
-						# ...
-						if --len <= 0
-							callback err
 		self.db.open (err, result) ->
 			if self.auth
 				[username, password] = self.auth.split ':', 2
 				self.db.authenticate username, password, (err, result) ->
-					return callback err if err
-					register callback
+					return callback? err.message if err
+					self.register collections, callback
 			else
-				return callback err if err
-				register callback
+				return callback? err.message if err
+				self.register collections, callback
+		return
 
-	query: (collection, query, callback) ->
-		query = _.rql(query).toMongo()
+	register: (schema, callback) ->
+		self = @
+		len = _.keys(schema).length
+		for name, definition of schema
+			do (name) ->
+				self.db.collection name, (err, coll) ->
+					self.collections[name] = coll
+					# TODO: may init indexes here
+					# ...
+					# model
+					store = self.Entity name, definition
+					# extend the store
+					if definition?.prototype
+						for own k, v of definition.prototype
+							store[k] = if typeof v is 'function' then v.bind store else v
+						delete definition.prototype
+					# define identification
+					Object.defineProperties store,
+						id:
+							value: name
+						schema:
+							value: definition
+					# register model
+					self.model[name] = store
+					# all done?
+					if --len <= 0
+						callback? err?.message, self.model
+				return
+		return
+
+	#
+	# return the list of documents matching `query`; attributes are filtered by optional `schema`
+	#
+	query: (collection, schema, context, query, callback) ->
+		query = _.rql(query)
+		# skip documents marked as deleted
+		if @attrInactive
+			query = query.ne(@attrInactive,true)
+		query = query.toMongo()
 		#console.log 'FIND!', query
 		@collections[collection].find query.search, query.meta, (err, cursor) ->
-			return callback err if err
+			return callback? err.message if err
 			cursor.toArray (err, docs) ->
 				#console.log 'FOUND', arguments
-				return callback err if err
+				return callback? err.message if err
 				ta = query.meta.toArray
 				for doc, i in docs
+					# _id -> id
 					doc.id = doc._id
 					delete doc._id
+					# filter out protected fields
+					if schema
+						_.validate doc, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 					docs[i] = _.toArray doc if ta
-				callback null, docs
+				callback? null, docs
+		return
 
-	get: (collection, id, callback) ->
-		@query collection, _.rql('limit(1)').eq('id',id), (err, result) ->
-			return callback err if err
-			callback null, result[0] or null
-
-	add: (collection, document, callback) ->
-		self = @
-		# id -> _id
-		document ?= {}
-		if document.id
-			document._id = document.id
-			delete document.id
-		# add history line
-		document._meta =
-			history: [
-				who: document._meta?.creator
-				when: Date.now()
-				# FIXME: should we put initial document here?
-			]
-		# assign new _id unless specified
-		document._id = @idFactory() unless document._id
-		# do add
-		@collections[collection].insert document, {safe: true}, (err, result) ->
-			#console.log 'ADD', arguments
-			if err
-				if err.message.substring(0,6) is 'E11000'
-					err.message = 'Duplicated'
-				callback err.message
-				#self.emit 'add',
-				#	collection: collection
-				#	error: err.message
-			else
-				result = result[0]
-				result.id = result._id
-				delete result._id
-				callback null, result
-				#self.emit 'add',
-				#	collection: collection
-				#	result: result
-
-	###
-	# FIXME: feasible to have?????
 	#
-	put: (collection, document, callback) ->
-		document ?= {}
-		if document.id
-			document._id = document.id
-			delete document.id
-		# add history line
-		document._meta =
-			history: [
-				who: document._meta?.modifier
-				when: Date.now()
-				# FIXME: should we put initial document here?
-			]
-		@collections[collection].update {_id: document._id}, document, (err, result) ->
-			callback err
-	###
+	# return the first documents matching `id`; attributes are filtered by optional `schema`
+	# N.B. internally uses @query
+	#
+	get: (collection, schema, context, id, callback) ->
+		query = _.rql('limit(1)').eq('id',id)
+		# N.B. if id is array -- what to do?
+		@query collection, schema, context, query, (err, result) ->
+			if callback
+				if err
+					callback err.message
+				else
+					callback null, result[0] or null
+		return
 
-	update: (collection, query, changes, callback) ->
+	#
+	# ??? filters only documents owned by the context user
+	#
+	owned: (context, query) ->
+		if context?.user?.id then _.rql(query).eq('_meta.history.0.who', context?.user?.id) else _.rql(query)
+
+	#
+	# insert new `document` validated by optional `schema`
+	#
+	add: (collection, schema, context, document, callback) ->
 		self = @
+		user = context?.user?.id
+		document ?= {}
+		# assign new primary key unless specified
+		document.id = @idFactory() unless document.id
+		Next self,
+			(err, result, next) ->
+				#console.log 'BEFOREADD', document, schema
+				# validate document
+				if schema
+					_.validate document, schema, {vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add'}, next
+				else
+					next null, document
+			(err, document, next) ->
+				#console.log 'ADDVALIDATED', arguments
+				return next err if err
+				# id -> _id
+				document._id = document.id
+				delete document.id
+				# add history line
+				document._meta =
+					history: [
+						who: user
+						when: Date.now()
+						# FIXME: should we put initial document here?
+					]
+				# do add
+				@collections[collection].insert document, {safe: true}, next
+			(err, result, next) ->
+				#console.log 'ADD', arguments
+				if err
+					if err.message?.substring(0,6) is 'E11000'
+						err = [{property: 'id', message: 'duplicated'}]
+					callback? err
+					#self.emit 'add',
+					#	collection: collection
+					#	user: user
+					#	error: err
+				else
+					result = result[0]
+					result.id = result._id
+					delete result._id
+					# filter out protected fields
+					if schema
+						_.validate result, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
+					callback? null, result
+					#self.emit 'add',
+					#	collection: collection
+					#	user: user
+					#	result: result
+		return
+
+	#
+	# update documents matching `query` using `changes` partially validated by optional `schema`
+	#
+	update: (collection, schema, context, query, changes, callback) ->
+		self = @
+		user = context?.user?.id
 		# atomize the query
 		query = _.rql(query).toMongo()
 		query.search.$atomic = 1
 		# add history line
 		changes ?= {}
-		#console.log 'UPDATE?', changes
-		history =
-			who: changes._meta.modifier
-			when: Date.now()
-		delete changes._meta
-		history.what = changes
-		# ensure changes are in multi-update format
-		# FIXME: should prohibit $set and id in changes at facet level!!!
-		changes = $set: changes #unless changes.$set or changes.$unset
-		changes.$push = '_meta.history': history
-		# do multi update
-		@collections[collection].update query.search, changes, {multi: true}, (err, result) ->
-			callback err
-			#self.emit 'update',
-			#	collection: collection
-			#	search: query.search
-			#	changes: changes
-			#	err: err?.message
-			#	result: result
+		Next self,
+			(err, result, next) ->
+				#console.log 'BEFOREUPDATE', query, changes, schema
+				# validate document
+				if schema
+					_.validate changes, schema, {vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update'}, next
+				else
+					next null, changes
+			(err, changes, next) ->
+				#console.log 'BEFOREUPDATEVALIDATED', arguments
+				# N.B. we inhibit empty changes
+				return next err if err or not _.keys changes
+				history =
+					who: user
+					when: Date.now()
+				delete changes._meta
+				history.what = changes
+				# ensure changes are in multi-update format
+				# FIXME: should prohibit $set and id in changes at facet level!!!
+				changes = $set: changes #unless changes.$set or changes.$unset
+				changes.$push = '_meta.history': history
+				# do multi update
+				@collections[collection].update query.search, changes, {multi: true}, next
+			(err, result) ->
+				callback? err?.message or err
+				#self.emit 'update',
+				#	collection: collection
+				#	user: user
+				#	search: query.search
+				#	changes: changes
+				#	err: err?.message or err
+				#	result: result
+		return
 
-	remove: (collection, query, callback) ->
+	#
+	# physically remove documents
+	#
+	remove: (collection, context, query, callback) ->
 		self = @
+		user = context?.user?.id
 		query = _.rql(query).toMongo()
 		# naive fuser
-		return callback 'Refuse to remove all documents w/o conditions' unless _.keys(query.search).length
+		return callback? 'Refuse to remove all documents w/o conditions' unless _.keys(query.search).length
 		@collections[collection].remove query.search, (err) ->
-			callback err
+			callback? err?.message
 			#self.emit 'remove',
 			#	collection: collection
+			#	user: user
 			#	search: query.search
 			#	error: err?.message
-
-time1 = null
-time2 = null
-
-db = new Database 'mongodb://127.0.0.1:27017/simple'
-Next db,
-	(err, result, next) ->
-		@open ['Language'], next
-	(err, result, next) ->
-		@remove 'Language', 'all!=true', next
-	(err, result, next) ->
-		@add 'Language', {id: 'fr1'}, next
-	(err, result, next) ->
-		console.log 'ADDED', arguments
-		@add 'Language', {foo: 'bar'}, next
-	(err, result, next) ->
-		@put 'Language', {_id: 'fr2', name: 'Francais'}, next
-	(err, result, next) ->
-		@get 'Language', 'fr1', next
-	(err, result, next) ->
-		console.log 'GOT fr1', arguments
-		@remove 'Language', ['fr1'], next
-	(err, result, next) ->
-		@update 'Language', '', {tanya: true}, next
-	(err, result, next) ->
-		# FIXME: sort!
-		#@query 'Language', 'tanya!=false&select(foo)&sort(-id)', next
-		@query 'Language', 'tanya!=false&select(foo)', next
-	(err, result, next) ->
-		console.log 'QUERIED', arguments
-		@remove 'Language', 'all!=true', next
-	(err, result, next) ->
-		time1 = Date.now()
-		console.log 'START:'
-		nonce = () -> Math.random().toString().substring(2)
-		for i in [10000...0]
-			do () -> db.add 'Language', {name: nonce()}, (err, result) -> next() unless i
 		return
-	(err, result, next) ->
-		time2 = Date.now()
-		# 6000
-		# 5500 id <-> _id
-		# 5300 emit 'add', ...
-		# 4100 _meta
-		console.log 'DONE:', "#{10000000/(time2-time1)} doc/sec"
+
+	#
+	# mark documents as deleted if @attrInactive specified, or remove them unless
+	#
+	delete: (collection, context, query, callback) ->
+		if @attrInactive
+			query = _.rql(query).ne(@attrInactive,true).toMongo()
+			# the only change is to set @attrInactive
+			changes = {}
+			changes[@attrInactive] = true
+			# update documents
+			@update collection, null, context, query.search, changes, callback
+		else
+			@remove collection, context, query, callback
+		return
+
+	#
+	# clears documents' deleted mark
+	#
+	undelete: (collection, context, query, callback) ->
+		if @attrInactive
+			query = _.rql(query).eq(@attrInactive,true).toMongo()
+			# the only change is to set @attrInactive
+			changes = {}
+			changes[@attrInactive] = false
+			# update documents
+			@update collection, null, context, query.search, changes, callback
+		else
+			callback?()
+		return
+
+	#
+	# physically remove documents marked as deleted
+	#
+	purge: (collection, context, query, callback) ->
+		if @attrInactive
+			query = _.rql(query).eq(@attrInactive,true)
+			@remove collection, context, query, callback
+		else
+			callback?()
+		return
+
+	#
+	# Entity -- set of DB accessor methods for a particular collection,
+	#			bound to the db and the collection and optional schema
+	#
+	Entity: (entity, schema) ->
+		##@register [entity] # N.B. don't wait
+		db = @
+		# compose the store
+		store =
+			# un-schema-ed method -- should be for internal use only
+			_query: db.query.bind db, entity
+			_get: db.get.bind db, entity
+			_add: db.add.bind db, entity
+			_update: db.update.bind db, entity
+			# safe accessors
+			query: db.query.bind db, entity, schema
+			get: db.get.bind db, entity, schema
+			add: db.add.bind db, entity, schema
+			update: db.update.bind db, entity, schema
+			remove: db.remove.bind db, entity
+			delete: db.delete.bind db, entity
+			undelete: db.undelete.bind db, entity
+			purge: db.purge.bind db, entity
+
+module.exports = Database
