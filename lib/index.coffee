@@ -3,9 +3,9 @@
 #
 # improve console.log
 #
-inspect = require('eyes.js').inspector stream: null
-consoleLog = console.log
-console.log = () -> consoleLog inspect arg for arg in arguments
+#inspect = require('eyes.js').inspector stream: null
+#consoleLog = console.log
+#console.log = () -> consoleLog inspect arg for arg in arguments
 
 #
 # flow
@@ -34,13 +34,13 @@ global.All = (context, steps...) ->
 			try
 				fn.call context, err, result, next
 			catch err
-				console.log 'FATAL: ' + err #err?.message or err
+				console.log 'FATAL: ' + err.stack
 				process.exit 1
 		else
 			if err
-				console.log 'FATAL: ' + err #err?.message or err
+				console.log 'FATAL: ' + err.stack
 				process.exit 1
-		context
+		return
 	next()
 
 #

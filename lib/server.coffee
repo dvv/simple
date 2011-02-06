@@ -1,12 +1,13 @@
 'use strict'
 
 #
-# farm factory, takes configuration and the request handler
+# farm factory, takes request handler and configuration
 #
-module.exports = (handler, options) ->
+module.exports = (handler, options = {}) ->
+
+	net = require 'net'
 
 	# options
-	options ?= {}
 	options.port ?= 80
 
 	#
@@ -39,7 +40,7 @@ module.exports = (handler, options) ->
 		comm.on 'fd', (fd) ->
 			# TODO: could use conf passed from master
 			server.listenFD fd, 'tcp4'
-			console.log "WORKER #{node.id} started"
+			console.log "WORKER #{node.id} started as PID #{process.pid}"
 		comm.resume()
 
 	# master branch
@@ -49,7 +50,6 @@ module.exports = (handler, options) ->
 		Object.defineProperty node, 'isMaster', value: true
 
 		# bind master socket
-		net = require 'net'
 		netBinding = process.binding 'net'
 		socket = netBinding.socket 'tcp4'
 		netBinding.bind socket, options.port
@@ -80,6 +80,7 @@ module.exports = (handler, options) ->
 			env._WID_ = id
 			[outfd, infd] = netBinding.socketpair()
 			# spawn worker process
+			console.error args
 			worker = spawn args[0], args.slice(1),
 				#cwd: undefined
 				env: env
@@ -114,7 +115,7 @@ module.exports = (handler, options) ->
 		# report usage
 		unless options.quiet
 			console.log "#{options.workers} worker(s) running at http" +
-				(if options.sslKey then 's' else '') + "://*:#{options.port}/. Use CTRL+C to stop."
+				(if options.sslKey then 's' else '') + "://*:#{options.port}. Use CTRL+C to stop."
 
 		# start REPL
 		if options.repl

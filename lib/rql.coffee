@@ -106,15 +106,12 @@ class Query
 	#
 	# build mongo structured query
 	#
-	toMongo: (options) ->
-
-		options ?= {}
+	toMongo: (options = {}) ->
 
 		walk = (name, terms) ->
 			search = {} # compiled search conditions
 			# iterate over terms
-			_.each terms or [], (term) ->
-				term ?= {}
+			_.each terms or [], (term = {}) ->
 				func = term.name
 				args = term.args
 				# ignore bad terms

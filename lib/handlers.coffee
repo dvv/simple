@@ -1,43 +1,9 @@
 'use strict'
 
 #
-# nop handler
-#
-module.exports.nop = () -> (req, res, next) -> next()
-
-
-#
-# serve static content
-#
-module.exports.static = (options) ->
-
-	options ?= {}
-
-	static = new (require('static/node-static').Server)( options.dir or 'public', cache: options.ttl or 3600 )
-
-	handler = (req, res, next) ->
-
-		# parse the request, leave body alone
-		req.parse()
-
-		# attach request to response
-		res.req = req
-		res.headers ?= {}
-
-		# serve files
-		# no static file? -> none of our business
-		if req.method is 'GET'
-			static.serve req, res, (err, data) ->
-				next() if err?.status is 404
-		else
-			next()
-
-#
 # decode request body
 #
-module.exports.body = (options) ->
-
-	options ?= {}
+module.exports.body = (options = {}) ->
 
 	formidable = require 'formidable'
 
@@ -78,12 +44,18 @@ module.exports.body = (options) ->
 #
 # decode request JSON body
 #
-module.exports.jsonBody = (options) ->
-
-	options ?= {}
+module.exports.jsonBody = (options = {}) ->
 
 	(req, res, next) ->
 
+		# parse the request, leave body alone
+		req.parse()
+
+		# attach request to response
+		res.req = req
+		res.headers ?= {}
+
+		# N.B. content-type: application/json is required
 		if (req.method is 'POST' or req.method is 'PUT') and req.headers['content-type'].split(';')[0] is 'application/json'
 			req.params = {}
 			body = ''
@@ -95,7 +67,7 @@ module.exports.jsonBody = (options) ->
 					next()
 			req.on 'end', () ->
 				try
-					# TODO: use kriszyp's one?
+					# TODO: use kriszyp's more forgiving one?
 					req.params = JSON.parse body
 				catch x
 					req.params = x.message
@@ -124,75 +96,70 @@ module.exports.logResponse = (options) ->
 #
 # fetch secret cookie defining the user, lookup in db
 #
-module.exports.authCookie = (options) ->
-
-	options ?= {}
+module.exports.authCookie = (options = {}) ->
 
 	require('cookie').secret = options.secret
 	cookie = options.cookie or 'uid'
 	getContext = options.getContext
 
 	if getContext
+
+		# define helper to set/clear secured cookie
+		require('http').ServerResponse::setSession = (session) ->
+			cookieOptions = path: '/', httpOnly: true
+			if typeof session is 'object'
+				# set the cookie
+				cookieOptions.expires = session.expires if session.expires
+				@setSecureCookie cookie, session.uid, cookieOptions
+				undefined
+			else
+				# clear the cookie
+				@clearCookie cookie, cookieOptions
+				session
+
+		#
+		# handler
+		#
 		(req, res, next) ->
-			# get the user
+			# get the user ID
 			uid = req.getSecureCookie cookie
 			#console.log "UID #{uid}"
+			# attach context of that user to the request
 			getContext uid, (err, context) ->
 				# N.B. any error in getting user just means no user
 				req.context = context or user: {}
 				#console.log "USER", req.context.user
-				#
-				#
-				# define session persistence method
-				#
-				# FIXME: efficiency?! this creates a closure for each request!
-				# TODO: use res.req in res.send!
-				#
-				#
-				#req.remember = (session) ->
-				Object.defineProperty context, 'remember', value: (session, callback) ->
-					cookieOptions = path: '/', httpOnly: true
-					if typeof session is 'object'
-						#console.log 'SESSSET', session
-						# set the cookie
-						cookieOptions.expires = session.expires if session.expires
-						res.setSecureCookie cookie, session.uid, cookieOptions
-						callback null, true
-					else
-						#console.log 'SESSKILL'
-						res.clearCookie cookie, cookieOptions
-						callback (if session isnt true then session else null), session is true
 				# freeze the context
-				Object.freeze context
+				#Object.freeze context
 				#
 				next()
-
 	else
 		(req, res, next) ->
-			# fake user
+			# null user
 			req.context = user: {}
 			next()
 
 #
 # jsonrpc handler
 #
-# given req.user.facet, try to find and execute request handler
+# given req.context, try to find there the request handler and execute it
 #
 # TODO: document!
 #
-module.exports.jsonrpc = (options) ->
+module.exports.jsonrpc = (options = {}) ->
 
-	options ?= {}
-
-	# TODO: require json-rpc.handle
+	# TODO: put here a generic json-rpc.handler
 
 	(req, res, next) ->
+
+		#console.log 'HEADS', req.headers
+		#return next() unless req.headers.accept.split(';')[0] is 'application/json'
 
 		Next {},
 			(xxx, yyy, step) ->
 				#console.log 'PARSEDBODY', req.params
 				# pass errors to serializer
-				return step err if typeof req.params is 'string'
+				return step req.params if typeof req.params is 'string'
 				#
 				# parse the query
 				#
@@ -280,16 +247,24 @@ module.exports.jsonrpc = (options) ->
 				console.log 'CALL', call
 				fn = _.drill context, call.method
 				if fn
-					args = if Array.isArray call.params then call.params else [call.params]
+					args = if Array.isArray call.params then call.params else if call.params then [call.params] else []
 					args.unshift context
 					args.push step
+					console.log 'CALLING', args, fn.length
 					if args.length isnt fn.length
 						return step 406
-					console.log 'CALLING', args, fn.length
 					fn.apply null, args
-					return
+					#return
 				else
-					step 403
+					# no handler in context
+					# check login call
+					if call.method is 'login' and context.verify
+						context.verify call.params, (err, session) ->
+							step res.setSession err or session
+					else
+						# no handler here
+						#console.log 'NOTFOUND', call
+						next()
 			(err, result) ->
 				console.log 'RESULT', arguments
 				#res.send err or result
@@ -298,13 +273,11 @@ module.exports.jsonrpc = (options) ->
 				#response.id = data.id if data?.id
 				if err
 					response.error = err.message or err
-				else if result is null
-					response.error = 404
+				else if result is undefined
+					response.result = true
 				else
-					response.result = result? and result or true
+					response.result = result
 				# respond
-				#res.headers['content-type'] = 'application/json-rpc; charset=utf-8'
-				#next null, response
 				res.send response, 'content-type': 'application/json-rpc; charset=utf-8'
 
 #
@@ -329,3 +302,20 @@ module.exports.mount = (method, path, handler) ->
 				fn req, res, next
 			else
 				next()
+
+#
+# serve static content
+#
+module.exports.static = (options = {}) ->
+
+	static = new (require('static/node-static').Server)( options.dir or 'public', cache: options.ttl or 3600 )
+
+	handler = (req, res, next) ->
+
+		# serve files
+		# no static file? -> none of our business
+		if req.method is 'GET'
+			static.serve req, res, (err, data) ->
+				next() if err?.status is 404
+		else
+			next()

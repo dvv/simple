@@ -17,9 +17,8 @@
 #
 # N.B. since we allow "enum" attribute to be async, the whole validator is treated as async if callback is specified
 #
-module.exports = (instance, schema, options, callback) ->
+module.exports = (instance, schema, options = {}, callback) ->
 
-	options ?= {}
 	# FIXME: what it is?
 	_changing = options.changing
 
@@ -190,10 +189,11 @@ module.exports = (instance, schema, options, callback) ->
 	# run async validators, if any
 	len = asyncs.length
 	if callback and len
-		#_.each asyncs, (async) ->
+		# N.B. 'this' contains valuable context
+		context = @
 		for async, i in asyncs
 			do (async) ->
-				async.fetch async.value, (err) ->
+				async.fetch.call context, async.value, (err) ->
 					if err
 						errors.push property: async.path, message: 'enum'
 					len -= 1

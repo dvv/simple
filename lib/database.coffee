@@ -6,8 +6,7 @@ events = require 'events'
 
 class Database extends events.EventEmitter
 
-	constructor: (options, definitions, callback) ->
-		options ?= {}
+	constructor: (options = {}, definitions, callback) ->
 		# we connect by URL
 		conn = parseUrl options.url or ''
 		host = conn.hostname
@@ -128,22 +127,21 @@ class Database extends events.EventEmitter
 	#
 	# insert new `document` validated by optional `schema`
 	#
-	add: (collection, schema, context, document, callback) ->
+	add: (collection, schema, context, document = {}, callback) ->
 		self = @
 		user = context?.user?.id
-		document ?= {}
 		# assign new primary key unless specified
 		document.id = @idFactory() unless document.id
 		Next self,
 			(err, result, next) ->
-				#console.log 'BEFOREADD', document, schema
+				#console.error 'BEFOREADD', document, schema
 				# validate document
 				if schema
-					_.validate document, schema, {vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add'}, next
+					_.validate.call context, document, schema, {vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add'}, next
 				else
 					next null, document
 			(err, document, next) ->
-				#console.log 'ADDVALIDATED', arguments
+				#console.error 'ADDVALIDATED', arguments
 				return next err if err
 				# id -> _id
 				document._id = document.id
@@ -158,7 +156,7 @@ class Database extends events.EventEmitter
 				# do add
 				@collections[collection].insert document, {safe: true}, next
 			(err, result, next) ->
-				#console.log 'ADD', arguments
+				#console.error 'ADD', arguments
 				if err
 					if err.message?.substring(0,6) is 'E11000'
 						err = [{property: 'id', message: 'duplicated'}]
@@ -184,14 +182,13 @@ class Database extends events.EventEmitter
 	#
 	# update documents matching `query` using `changes` partially validated by optional `schema`
 	#
-	update: (collection, schema, context, query, changes, callback) ->
+	update: (collection, schema, context, query, changes = {}, callback) ->
 		self = @
 		user = context?.user?.id
 		# atomize the query
 		query = _.rql(query).toMongo()
 		query.search.$atomic = 1
 		# add history line
-		changes ?= {}
 		Next self,
 			(err, result, next) ->
 				#console.log 'BEFOREUPDATE', query, changes, schema
@@ -305,8 +302,12 @@ class Database extends events.EventEmitter
 			add: db.add.bind db, entity, schema
 			update: db.update.bind db, entity, schema
 			remove: db.remove.bind db, entity
-			delete: db.delete.bind db, entity
-			undelete: db.undelete.bind db, entity
-			purge: db.purge.bind db, entity
+		# special methods to support delayed deletion
+		if @attrInactive
+			_.extend store,
+				delete: db.delete.bind db, entity
+				undelete: db.undelete.bind db, entity
+				purge: db.purge.bind db, entity
+		store
 
 module.exports = Database

@@ -9,7 +9,7 @@ _.mixin require './rql'
 _validate = require './validate'
 _.mixin
 	validate: (instance, schema, options, next) ->
-		_validate instance, schema, _.extend(options or {}, coerce: _.coerce), next
+		_validate.call @, instance, schema, _.extend(options or {}, coerce: _.coerce), next
 
 # _.drill({a:{b:{c:[0,2,4]}}},['a','b','c',2]) ---> 4
 # _.drill({a:{b:{get:function(attr){return{c:[0,2,4]}[attr];}}}},['a','b','c',2]) ---> 4
