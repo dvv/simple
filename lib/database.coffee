@@ -33,6 +33,9 @@ class Database extends events.EventEmitter
 	#
 	# connect to DB, optionally authenticate, cache collections named after `collections[]`
 	#
+	#
+	# FIXME: we already have this in the driver?!
+	#
 	open: (collections, callback) ->
 		self = @
 		self.db.open (err, result) ->
@@ -48,7 +51,7 @@ class Database extends events.EventEmitter
 
 	register: (schema, callback) ->
 		self = @
-		len = _.keys(schema).length
+		len = _.size schema
 		for name, definition of schema
 			do (name) ->
 				self.db.collection name, (err, coll) ->
@@ -147,9 +150,12 @@ class Database extends events.EventEmitter
 				document._id = document.id
 				delete document.id
 				# add history line
+				#console.log 'CREATOR', user, context?.user?._meta?.history?[0].who
+				parents = context?.user?._meta?.history?[0].who or []
+				parents.unshift user
 				document._meta =
 					history: [
-						who: user
+						who: parents
 						when: Date.now()
 						# FIXME: should we put initial document here?
 					]
@@ -200,7 +206,7 @@ class Database extends events.EventEmitter
 			(err, changes, next) ->
 				#console.log 'BEFOREUPDATEVALIDATED', arguments
 				# N.B. we inhibit empty changes
-				return next err if err or not _.keys changes
+				return next err if err or not _.size changes
 				history =
 					who: user
 					when: Date.now()
@@ -231,7 +237,7 @@ class Database extends events.EventEmitter
 		user = context?.user?.id
 		query = _.rql(query).toMongo()
 		# naive fuser
-		return callback? 'Refuse to remove all documents w/o conditions' unless _.keys(query.search).length
+		return callback? 'Refuse to remove all documents w/o conditions' unless _.size query.search
 		@collections[collection].remove query.search, (err) ->
 			callback? err?.message
 			#self.emit 'remove',
@@ -296,6 +302,8 @@ class Database extends events.EventEmitter
 			_get: db.get.bind db, entity
 			_add: db.add.bind db, entity
 			_update: db.update.bind db, entity
+			# owned helper
+			owned: db.owned
 			# safe accessors
 			query: db.query.bind db, entity, schema
 			get: db.get.bind db, entity, schema

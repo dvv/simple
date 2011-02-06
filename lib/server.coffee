@@ -80,7 +80,6 @@ module.exports = (handler, options = {}) ->
 			env._WID_ = id
 			[outfd, infd] = netBinding.socketpair()
 			# spawn worker process
-			console.error args
 			worker = spawn args[0], args.slice(1),
 				#cwd: undefined
 				env: env

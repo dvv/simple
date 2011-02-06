@@ -9,9 +9,7 @@
 ###
 
 #
-# TODO: relax "readonly"
-# TODO: on get it should _only_ delete readonly.get === true properties
-# TODO: on update it should not set defaults
+# TODO: relax "readonly" complexity
 #
 
 #
