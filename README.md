@@ -33,7 +33,9 @@ Run:
 
 ## Example
 
-See [here](https://github.com/dvv/simple-example)
+    ./example.coffee
+
+or [here](https://github.com/dvv/simple-example)
 
 ## License
 
