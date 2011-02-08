@@ -1,4 +1,5 @@
 ###
+
 	JSONSchema Validator - Validates JavaScript objects using JSON Schemas
 	(http://www.json.com/json-schema-proposal/)
 
@@ -6,14 +7,48 @@
 	Copyright (c) 2011 Vladimir Dronnikov dronnikov@gmail.com
 
 	Licensed under the MIT (MIT-LICENSE.txt) license
+
 ###
 
 #
-# TODO: relax "readonly" complexity
+# we allow property definition to contain `veto` attribute to control whether to retain the property after validation 
+# if it's === true -- the property will be deleted
+# if it is a hash, it specifies the flavors of validation ('add', 'update', 'get') when the property is deleted
+#
+# E.g. veto: {get: true} means when validation is called with truthy options.veto and options.flavor == 'get', the property will be deleted 
 #
 
 #
+# given `value`, try to coerce it to `type`
+#
+coerce = (value, type) ->
+	if type is 'string'
+		value = if value then ''+value else ''
+	else if type in ['number', 'integer']
+		unless _.isNaN value
+			value = +value;
+			value = Math.floor value if type is 'integer'
+	else if type is 'boolean'
+		value = if value is 'false' then false else not not value
+	else if type is 'null'
+		value = null
+	else if type is 'object'
+		# can't really think of any sensible coercion to an object
+		if JSON?.parse
+			try
+				value = JSON.parse value
+			catch err
+	else if type is 'array'
+		value = if not value? or typeof value is 'object' then _.toArray value else [value]
+	else if type is 'date'
+		date = new Date value
+		value = date unless _.isNaN date.getTime()
+	value
+
+#
 # N.B. since we allow "enum" attribute to be async, the whole validator is treated as async if callback is specified
+#
+# we allow type coercion if options.coerce
 #
 module.exports = (instance, schema, options = {}, callback) ->
 
@@ -30,9 +65,9 @@ module.exports = (instance, schema, options = {}, callback) ->
 	checkProp = (value, schema, path, i) ->
 
 		if path
-			if typeof i == 'number'
+			if typeof i is 'number'
 				path += '[' + i + ']'
-			else if typeof i == 'undefined'
+			else if typeof i is 'undefined'
 				path += ''
 			else
 				path += '.' + i
@@ -97,7 +132,7 @@ module.exports = (instance, schema, options = {}, callback) ->
 							if itemsIsArray
 								propDef = schema.items[i]
 							if options.coerce
-								value[i] = options.coerce v, propDef.type
+								value[i] = coerce v, propDef.type
 							errors.concat checkProp v, propDef, path, i
 					if schema.minItems and value.length < schema.minItems
 						addError 'minItems'
@@ -144,8 +179,8 @@ module.exports = (instance, schema, options = {}, callback) ->
 				value = instance[i]
 				# skip _not_ specified properties
 				continue if value is undefined and options.existingOnly
-				# veto readonly props
-				if options.vetoReadOnly and (propDef.readonly is true or typeof propDef.readonly is 'object' and propDef.readonly[options.flavor])
+				# veto props
+				if options.veto and (propDef.veto is true or typeof propDef.veto is 'object' and propDef.veto[options.flavor])
 					delete instance[i]
 					continue
 				# done with validation if it is called for 'get'
@@ -155,7 +190,7 @@ module.exports = (instance, schema, options = {}, callback) ->
 					value = instance[i] = propDef.default
 				# coerce if coercion is enabled
 				if options.coerce and i of instance
-					value = options.coerce value, propDef.type
+					value = coerce value, propDef.type
 					instance[i] = value
 				checkProp value, propDef, path, i
 
@@ -171,7 +206,7 @@ module.exports = (instance, schema, options = {}, callback) ->
 				errors.push property: path, message: 'requires'
 			if additionalProp and (not (objTypeDef and typeof objTypeDef is 'object') or not (i of objTypeDef))
 				if options.coerce
-					value = options.coerce value, additionalProp.type
+					value = coerce value, additionalProp.type
 					instance[i] = value
 				checkProp value, additionalProp, path, i
 			if not _changing and value?.$schema

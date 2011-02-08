@@ -278,6 +278,9 @@ autoConverted =
 	'Infinity': Infinity
 	'-Infinity': -Infinity
 
+#
+# FIXME: should reuse coerce() from validate.coffee?
+#
 converters =
 	auto: (string) ->
 		if autoConverted.hasOwnProperty string
@@ -310,7 +313,8 @@ converters =
 		throw new URIError 'Invalid date ' + x unless _.isDate date #if _.isNaN date.getTime()
 		date
 	boolean: (x) ->
-		x is 'true'
+		#x is 'true'
+		if x is 'false' then false else not not x
 	string: (string) ->
 		decodeURIComponent string
 	re: (x) ->
@@ -360,31 +364,4 @@ plusMinus =
 	select: [1, 0]
 
 module.exports =
-	#Query: Query
-	#parse: parse
 	rql: parse
-
-'''
-
-#
-# tests
-#
-inspect = require('./lib/node/eyes.js').inspector stream: null
-consoleLog = console.log
-console.log = () -> consoleLog inspect arg for arg in arguments
-
-
-#q1 = new Query 'id!=123&call(p1,p2/p3),sort(-n,+a/b,-id),id>=date:2010'
-#q1.where 'u!=false&values(a,-b,c/d,-e/f/g),limit(10)'
-#q1.nin('id',[456])
-#q1 = new Query('(a=b|c!=re:d|a=d|a!=e)')
-#q1 = new Query('a=b&c!=re:d(')
-#q2 = new Query()
-#console.log q1, ''+q1, q1.toMongo(), ''+q1
-q1 = new Query().nin('id',[456])
-q2 = new Query(q1)
-console.log q1, q2.toMongo()
-global.Query = Query
-#console.log parse '(123'
-require('repl').start 'node>'
-'''

@@ -4,6 +4,9 @@ parseUrl = require('url').parse
 mongo = require 'mongodb'
 events = require 'events'
 
+# json-schema validator
+validate = require './validate'
+
 class Database extends events.EventEmitter
 
 	constructor: (options = {}, definitions, callback) ->
@@ -20,7 +23,8 @@ class Database extends events.EventEmitter
 		# primary key factory
 		@idFactory = () -> (new mongo.BSONPure.ObjectID).toHexString()
 		# attribute to be used to mark document as deleted
-		@attrInactive = '_deleted'
+		# N.B. it allows for 3 additional methods: delete/undelete/purge
+		@attrInactive = options.attrInactive #'_deleted'
 		# DB connection
 		@db = new mongo.Db name or 'test', new mongo.Server(host or '127.0.0.1', port or 27017) #, native_parser: true
 		# register schema
@@ -101,7 +105,7 @@ class Database extends events.EventEmitter
 					delete doc._id
 					# filter out protected fields
 					if schema
-						_.validate doc, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
+						validate doc, schema, veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 					docs[i] = _.toArray doc if ta
 				callback? null, docs
 		return
@@ -140,7 +144,7 @@ class Database extends events.EventEmitter
 				#console.error 'BEFOREADD', document, schema
 				# validate document
 				if schema
-					_.validate.call context, document, schema, {vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add'}, next
+					validate.call context, document, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add', coerce: true}, next
 				else
 					next null, document
 			(err, document, next) ->
@@ -177,7 +181,7 @@ class Database extends events.EventEmitter
 					delete result._id
 					# filter out protected fields
 					if schema
-						_.validate result, schema, vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
+						validate result, schema, veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 					callback? null, result
 					#self.emit 'add',
 					#	collection: collection
@@ -200,7 +204,7 @@ class Database extends events.EventEmitter
 				#console.log 'BEFOREUPDATE', query, changes, schema
 				# validate document
 				if schema
-					_.validate changes, schema, {vetoReadOnly: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update'}, next
+					validate.call context, changes, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update', coerce: true}, next
 				else
 					next null, changes
 			(err, changes, next) ->

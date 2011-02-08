@@ -5,12 +5,6 @@ _.mixin require 'underscore.string'
 # mixin Resource Query Language
 _.mixin require './rql'
 
-# mixin json-schema validation
-_validate = require './validate'
-_.mixin
-	validate: (instance, schema, options, next) ->
-		_validate.call @, instance, schema, _.extend(options or {}, coerce: _.coerce), next
-
 # _.drill({a:{b:{c:[0,2,4]}}},['a','b','c',2]) ---> 4
 # _.drill({a:{b:{get:function(attr){return{c:[0,2,4]}[attr];}}}},['a','b','c',2]) ---> 4
 _.mixin
@@ -64,16 +58,16 @@ _.mixin
 	#
 	# expose enlisted object properties
 	#
-	proxy: (obj, expose) ->
+	proxy: (obj, exposes) ->
 		facet = {}
-		expose and expose.forEach (definition) ->
+		exposes and exposes.forEach (definition) ->
 			if _.isArray definition
 				name = definition[1]
-				method = definition[0]
-				method = obj[method] if typeof method is 'string'
+				prop = definition[0]
+				prop = obj[prop] if typeof prop is 'string'
 			else
 				name = definition
-				method = obj[name]
+				prop = obj[name]
 			#
-			facet[name] = method if method
+			facet[name] = prop if prop
 		Object.freeze facet
