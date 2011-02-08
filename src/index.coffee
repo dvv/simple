@@ -3,7 +3,7 @@
 #
 # improve console.log
 #
-#inspect = require('eyes.js').inspector stream: null
+#inspect = require('../lib/node/eyes.js').inspector stream: null
 #consoleLog = console.log
 #console.log = () -> consoleLog inspect arg for arg in arguments
 
@@ -46,9 +46,11 @@ global.All = (context, steps...) ->
 #
 # expose Object helpers
 #
-global._ = require 'underscore'
+global._ = require '../lib/node/underscore'
 require './U.obj'
 require './validate'
+require './rql'
+Object.freeze _
 
 #
 # improve http.IncomingMessage
@@ -63,4 +65,5 @@ require './response'
 module.exports =
 	Database: require './database'
 	run: require './server'
+	stack: require '../lib/node/stack'
 	handlers: require './handlers'

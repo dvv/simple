@@ -1,7 +1,7 @@
 'use strict'
 
 parseUrl = require('url').parse
-mongo = require 'mongodb'
+mongo = require '../lib/node/mongodb'
 events = require 'events'
 
 class Database extends events.EventEmitter
@@ -123,7 +123,7 @@ class Database extends events.EventEmitter
 		return
 
 	#
-	# ??? filters only documents owned by the context user
+	# generate query to filter only documents owned by the context user or his subordinates
 	#
 	owned: (context, query) ->
 		if context?.user?.id then _.rql(query).eq('_meta.history.0.who', context?.user?.id) else _.rql(query)

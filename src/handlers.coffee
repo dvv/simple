@@ -5,7 +5,7 @@
 #
 module.exports.body = (options = {}) ->
 
-	formidable = require 'formidable'
+	formidable = require '../lib/node/formidable'
 
 	handler = (req, res, next) ->
 
@@ -98,7 +98,7 @@ module.exports.logResponse = (options) ->
 #
 module.exports.authCookie = (options = {}) ->
 
-	require('cookie').secret = options.secret
+	require('../lib/node/cookie').secret = options.secret
 	cookie = options.cookie or 'uid'
 	getContext = options.getContext
 
@@ -244,13 +244,13 @@ module.exports.jsonrpc = (options = {}) ->
 				#
 				if parts[0] isnt ''
 					call.method = if call.method then [parts[0], call.method] else [parts[0]]
-				console.log 'CALL', call
+				#console.log 'CALL', call
 				fn = _.drill context, call.method
 				if fn
 					args = if Array.isArray call.params then call.params else if call.params then [call.params] else []
 					args.unshift context
 					args.push step
-					console.log 'CALLING', args, fn.length
+					#console.log 'CALLING', args, fn.length
 					if args.length isnt fn.length
 						return step 406
 					fn.apply null, args
@@ -266,7 +266,7 @@ module.exports.jsonrpc = (options = {}) ->
 						#console.log 'NOTFOUND', call
 						next()
 			(err, result) ->
-				console.log 'RESULT', arguments
+				#console.log 'RESULT', arguments
 				#res.send err or result
 				response =
 					jsonrpc: '2.0'
@@ -308,7 +308,7 @@ module.exports.mount = (method, path, handler) ->
 #
 module.exports.static = (options = {}) ->
 
-	static = new (require('static/node-static').Server)( options.dir or 'public', cache: options.ttl or 3600 )
+	static = new (require('../lib/node/static/node-static').Server)( options.dir or 'public', cache: options.ttl or 3600 )
 
 	handler = (req, res, next) ->
 
