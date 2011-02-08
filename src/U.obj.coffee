@@ -2,9 +2,6 @@
 
 _.mixin require 'underscore.string'
 
-# mixin Resource Query Language
-_.mixin require './rql'
-
 # _.drill({a:{b:{c:[0,2,4]}}},['a','b','c',2]) ---> 4
 # _.drill({a:{b:{get:function(attr){return{c:[0,2,4]}[attr];}}}},['a','b','c',2]) ---> 4
 _.mixin

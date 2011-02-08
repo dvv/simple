@@ -1,0 +1,56 @@
+#!/bin/sh
+
+deps='
+documentcloud/underscore/underscore.js:underscore.js
+creationix/stack/stack.js:stack.js
+cloudhead/node-static/lib:static
+jed/cookie-node/index.js:cookie.js
+creationix/simple-mime/simple-mime.js:mime.js
+dvv/node-mongodb-native:mongodb
+cloudhead/eyes.js/lib/eyes.js:eyes.js
+edtsech/underscore.string/lib/underscore.string.js:underscore.string.js
+'
+
+#
+# download dependencies
+#
+lib=lib/node
+jslib="$lib/../js"
+mkdir -p "$lib" "$jslib"
+for dep in $deps; do
+	# skip comments
+	case "$dep" in
+		\#*) continue ;;
+	esac
+	# parse definition
+	path=${dep%:*}
+	link=${dep##*:}
+	author=${path%%/*}
+	path=${path#*/}
+	git=${path%%/*}
+	# fetch the package
+	echo link ${author}\'s $git to $link, path $path
+	#continue
+	if ! test -d git/${git}; then
+		#git clone https://github.com/${author}/${git}.git git/${git}
+		mkdir -p git/${git}
+		wget -ct3 -q --progress=bar --no-check-certificate http://nodeload.github.com/${author}/${git}/tarball/master -O- | tar -xzf- --strip 1 -C git/${git}
+		cd git/${git}
+		#if test -f Makefile; then
+		#	make
+		#fi
+		if test -f wscript; then
+			node-waf configure build
+		fi
+		cd ../..
+	fi
+	# symlink entry point
+	if test "Q$link" != 'Q'; then
+		test -e "$lib/$link" || ln -s "../../git/$path" "$lib/$link"
+	fi
+done
+
+#
+# compile commonjs stuff
+#
+coffee -bc -o lib src/rql.coffee src/validate.coffee

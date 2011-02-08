@@ -48,6 +48,7 @@ global.All = (context, steps...) ->
 #
 global._ = require 'underscore'
 require './U.obj'
+require './validate'
 
 #
 # improve http.IncomingMessage

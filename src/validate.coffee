@@ -50,7 +50,7 @@ coerce = (value, type) ->
 #
 # we allow type coercion if options.coerce
 #
-module.exports = (instance, schema, options = {}, callback) ->
+validate = (instance, schema, options = {}, callback) ->
 
 	# FIXME: what it is?
 	_changing = options.changing
@@ -239,3 +239,10 @@ module.exports = (instance, schema, options = {}, callback) ->
 		return errors.length and errors or null
 
 	return
+
+#
+# mixin _
+#
+_.mixin
+	coerce: coerce
+	validate: validate

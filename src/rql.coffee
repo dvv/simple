@@ -363,5 +363,8 @@ plusMinus =
 	sort: [1, -1]
 	select: [1, 0]
 
-module.exports =
+#
+# mixin _
+#
+_.mixin
 	rql: parse

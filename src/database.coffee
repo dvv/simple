@@ -4,9 +4,6 @@ parseUrl = require('url').parse
 mongo = require 'mongodb'
 events = require 'events'
 
-# json-schema validator
-validate = require './validate'
-
 class Database extends events.EventEmitter
 
 	constructor: (options = {}, definitions, callback) ->
@@ -105,7 +102,7 @@ class Database extends events.EventEmitter
 					delete doc._id
 					# filter out protected fields
 					if schema
-						validate doc, schema, veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
+						_.validate doc, schema, veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 					docs[i] = _.toArray doc if ta
 				callback? null, docs
 		return
@@ -144,7 +141,7 @@ class Database extends events.EventEmitter
 				#console.error 'BEFOREADD', document, schema
 				# validate document
 				if schema
-					validate.call context, document, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add', coerce: true}, next
+					_.validate.call context, document, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add', coerce: true}, next
 				else
 					next null, document
 			(err, document, next) ->
@@ -181,7 +178,7 @@ class Database extends events.EventEmitter
 					delete result._id
 					# filter out protected fields
 					if schema
-						validate result, schema, veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
+						_.validate result, schema, veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 					callback? null, result
 					#self.emit 'add',
 					#	collection: collection
@@ -204,7 +201,7 @@ class Database extends events.EventEmitter
 				#console.log 'BEFOREUPDATE', query, changes, schema
 				# validate document
 				if schema
-					validate.call context, changes, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update', coerce: true}, next
+					_.validate.call context, changes, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update', coerce: true}, next
 				else
 					next null, changes
 			(err, changes, next) ->
