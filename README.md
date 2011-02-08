@@ -13,7 +13,7 @@ are about providing sugar to do routing and/or template rendering, paying no or 
 
 - christkv's [node-mongodb-native](https://github.com/christkv/node-mongodb-native) as persistence layer
 
-**Simple** can be run as single process, or as robust multiple processes farm similar to [multi-node](http://www.sitepen.com/blog/2010/07/14/multi-node-concurrent-nodejs-http-server/) or [spark](https://github.com/visionmedia/spark)
+**Simple** can be run as single process, or as robust multiple processes farm similar to [multi-node](http://www.sitepen.com/blog/2010/07/14/multi-node-concurrent-nodejs-http-server/) or [spark](https://github.com/senchalabs/spark)
 
 **Simple** talks _just_ JSON REST/RPC. All rendering is drawn as client-side task. I strongly suggest to look at [Backbone](https://github.com/documentcloud/backbone) as client-side MVC.
 
@@ -21,7 +21,7 @@ are about providing sugar to do routing and/or template rendering, paying no or 
 
 **Simple** uses JSON-Schema to describe entities and validation rules. Changes are made to vanilla JSON-Schema so that it could express per-property access rules.
 
-**Simple** uses facets similar to (http://www.sitepen.com/blog/2010/03/08/object-capability-model-and-facets-in-perstorepintura/) to expose entity accessor methods to both web and internal business logic.
+**Simple** uses facets similar to [](http://www.sitepen.com/blog/2010/03/08/object-capability-model-and-facets-in-perstorepintura/) to expose entity accessor methods to both web and internal business logic.
 
 ...More info to come...
 
