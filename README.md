@@ -21,7 +21,7 @@ are about providing sugar to do routing and/or template rendering, paying no or 
 
 **Simple** uses JSON-Schema to describe entities and validation rules. Changes are made to vanilla JSON-Schema so that it could express per-property access rules.
 
-**Simple** uses facets similar to [](http://www.sitepen.com/blog/2010/03/08/object-capability-model-and-facets-in-perstorepintura/) to expose entity accessor methods to both web and internal business logic.
+**Simple** uses [facets](http://www.sitepen.com/blog/2010/03/08/object-capability-model-and-facets-in-perstorepintura/) to expose entity accessor methods to both web and internal business logic.
 
 ...More info to come...
 
