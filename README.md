@@ -5,7 +5,8 @@ security based on Object Capabilities. Most of existing similar projects
 are about providing sugar to do routing and/or template rendering, paying
 no or little attention to security at all.
 
-*Simple* is written in (CoffeeScript)[http://jashkenas.github.com/coffee-script] and uses:
+**Simple** is written in (CoffeeScript)[http://jashkenas.github.com/coffee-script] and uses:
+
 - creationix's [Stack](https://github.com/creationix/stack) to form middleware
 
 - jed's Secure [cookies](https://github.com/jed/cookie-node) to persist authenticated user id
@@ -14,19 +15,15 @@ no or little attention to security at all.
 
 - christkv's [node-mongodb-native](https://github.com/christkv/node-mongodb-native) as persistence layer
 
-Simple can be run as single process, or as robust multi-node farm.
+**Simple** can be run as single process, or as robust multi-node farm.
 
-Simple talks _just_ JSON REST/RPC. All rendering is drawn as client-side task.
-I strongly suggest to look at (Backbone)[http://documentcloud.github.com/backbone/] as client-side MVC.
+**Simple** talks _just_ JSON REST/RPC. All rendering is drawn as client-side task. I strongly suggest to look at (Backbone)[http://documentcloud.github.com/backbone/] as client-side MVC.
 
-Simple uses (Resource Query Language)[https://githib.com/kriszyp/rql] and provides very flexible and powerful way to semantically map URLs to DB queries.
+**Simple** uses (Resource Query Language)[https://githib.com/kriszyp/rql] and provides very flexible and powerful way to semantically map URLs to DB queries.
 
-Simple uses JSON-Schema to describe entities and validation rules. Changes
-are made to vanilla JSON-Schema so that it could express per-property
-access rules.
+**Simple** uses JSON-Schema to describe entities and validation rules. Changes are made to vanilla JSON-Schema so that it could express per-property access rules.
 
-Simple uses Facet to expose entity accessor methods to both web and internal
-business logic.
+**Simple** uses facets to expose entity accessor methods to both web and internal business logic.
 
 ...More info to come...
 
