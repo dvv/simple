@@ -5,19 +5,21 @@ security based on Object Capabilities. Most of existing similar projects
 are about providing sugar to do routing and/or template rendering, paying
 no or little attention to security at all.
 
-Simple is written in CoffeeScript and uses:
+*Simple* is written in (CoffeeScript)[http://jashkenas.github.com/coffee-script] and uses:
 - creationix's [Stack](https://github.com/creationix/stack) to form middleware
-- jed's Secure cookies to persist authenticated user id
-- cloudhead's node-static to serve static content
-- christkv's node-mongodb-native as persistence layer
+
+- jed's Secure [cookies](https://github.com/jed/cookie-node) to persist authenticated user id
+
+- cloudhead's [node-static](https://github.com/cloudhead/node-static) to serve static content
+
+- christkv's [node-mongodb-native](https://github.com/christkv/node-mongodb-native) as persistence layer
 
 Simple can be run as single process, or as robust multi-node farm.
 
 Simple talks _just_ JSON REST/RPC. All rendering is drawn as client-side task.
-I strongly suggest to look at Backbone as client-side MVC.
+I strongly suggest to look at (Backbone)[http://documentcloud.github.com/backbone/] as client-side MVC.
 
-Simple uses Resource Query Language (RQL) and provides very flexible and
-powerful way to semantically map URLs to DB queries.
+Simple uses (Resource Query Language)[https://githib.com/kriszyp/rql] and provides very flexible and powerful way to semantically map URLs to DB queries.
 
 Simple uses JSON-Schema to describe entities and validation rules. Changes
 are made to vanilla JSON-Schema so that it could express per-property
