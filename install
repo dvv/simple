@@ -6,7 +6,7 @@ creationix/stack/stack.js:stack.js
 cloudhead/node-static/lib:static
 jed/cookie-node/index.js:cookie.js
 creationix/simple-mime/simple-mime.js:mime.js
-dvv/node-mongodb-native:mongodb
+christkv/node-mongodb-native:mongodb
 cloudhead/eyes.js/lib/eyes.js:eyes.js
 #
 #edtsech/underscore.string/lib/underscore.string.js:underscore.string.js
@@ -16,8 +16,8 @@ cloudhead/eyes.js/lib/eyes.js:eyes.js
 #
 # download dependencies
 #
-lib=lib/node
-jslib="$lib/../js"
+lib=node_modules
+jslib=js
 mkdir -p "$lib" "$jslib"
 for dep in $deps; do
 	# skip comments
@@ -48,11 +48,11 @@ for dep in $deps; do
 	fi
 	# symlink entry point
 	if test "Q$link" != 'Q'; then
-		test -e "$lib/$link" || ln -s "../../git/$path" "$lib/$link"
+		test -e "$lib/$link" || ln -s "../git/$path" "$lib/$link"
 	fi
 done
 
 #
 # compile commonjs stuff
 #
-coffee -bc -o lib/js src/rql.coffee src/validate.coffee
+coffee -bc -o js src/rql.coffee src/validate.coffee

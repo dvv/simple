@@ -6,7 +6,7 @@
 
 fs = require 'fs'
 http = require 'http'
-lookupMimeType = require('../lib/node/mime') 'application/octet-stream'
+lookupMimeType = require('mime') 'application/octet-stream'
 
 http.ServerResponse::send = (body, headers, status) ->
 

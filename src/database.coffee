@@ -1,7 +1,7 @@
 'use strict'
 
 parseUrl = require('url').parse
-mongo = require '../lib/node/mongodb'
+mongo = require 'mongodb'
 events = require 'events'
 
 class Database extends events.EventEmitter

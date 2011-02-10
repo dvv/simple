@@ -20,7 +20,7 @@ config =
 		#sslKey: 'key.pem'
 		#sslCert: 'cert.pem'
 		repl: true
-		static:
+		pub:
 			dir: 'public'
 			ttl: 3600
 		stackTrace: true
@@ -134,9 +134,9 @@ All {},
 			simple.handlers.mount 'POST', '/foo', (req, res, next) ->
 				res.send 'POSTED TO FOO'
 
-			simple.handlers.static
-				dir: config.server.static.dir
-				ttl: config.server.static.ttl
+			simple.handlers.static_
+				dir: config.server.pub.dir
+				ttl: config.server.pub.ttl
 
 		)
 

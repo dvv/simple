@@ -5,7 +5,7 @@
 #
 module.exports.body = (options = {}) ->
 
-	formidable = require '../lib/node/formidable'
+	formidable = require 'formidable'
 
 	handler = (req, res, next) ->
 
@@ -98,7 +98,7 @@ module.exports.logResponse = (options) ->
 #
 module.exports.authCookie = (options = {}) ->
 
-	require('../lib/node/cookie').secret = options.secret
+	require('cookie').secret = options.secret
 	cookie = options.cookie or 'uid'
 	getContext = options.getContext
 
@@ -306,16 +306,16 @@ module.exports.mount = (method, path, handler) ->
 #
 # serve static content
 #
-module.exports.static = (options = {}) ->
+module.exports.static_ = (options = {}) ->
 
-	static = new (require('../lib/node/static/node-static').Server)( options.dir or 'public', cache: options.ttl or 3600 )
+	static_ = new (require('static/node-static').Server)( options.dir or 'public', cache: options.ttl or 3600 )
 
 	handler = (req, res, next) ->
 
 		# serve files
 		# no static file? -> none of our business
 		if req.method is 'GET'
-			static.serve req, res, (err, data) ->
+			static_.serve req, res, (err, data) ->
 				next() if err?.status is 404
 		else
 			next()
