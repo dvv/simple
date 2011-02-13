@@ -25,7 +25,7 @@ class Query
 
 		topTerm = term
 
-		if typeof query is 'object'
+		if _.isObject query
 			if _.isArray query
 				topTerm.in 'id', query
 				return
@@ -34,7 +34,7 @@ class Query
 				#console.log 'term', term
 				query = query.toString()
 			else
-				for k, v of query
+				for own k, v of query
 					term = new Query()
 					topTerm.args.push term
 					term.name = 'eq'
@@ -50,7 +50,7 @@ class Query
 		# convert FIQL to normalized call syntax form
 		query = query.replace /(\([\+\*\$\-:\w%\._,]+\)|[\+\*\$\-:\w%\._]*|)([<>!]?=(?:[\w]*=)?|>|<)(\([\+\*\$\-:\w%\._,]+\)|[\+\*\$\-:\w%\._]*|)/g, (t, property, operator, value) ->
 			if operator.length < 3
-				throw new URIError 'Illegal operator ' + operator unless operatorMap[operator]
+				throw new URIError 'Illegal operator ' + operator unless operatorMap.hasOwnProperty operator
 				operator = operatorMap[operator]
 			else
 				operator = operator.substring 1, operator.length - 1
@@ -119,7 +119,7 @@ class Query
 				return unless func and args
 				# http://www.mongodb.org/display/DOCS/Querying
 				# nested terms? -> recurse
-				if typeof args[0]?.name is 'string' and _.isArray args[0].args
+				if _.isString args[0]?.name and _.isArray args[0].args
 					if _.include valid_operators, func
 						nested = walk func, args
 						search['$'+func] = nested
@@ -134,7 +134,7 @@ class Query
 						# sort/select/values affect query options
 						if func is 'values'
 							func = 'select'
-							options.toArray = true # flag to invoke _.toArray
+							options.values = true # flag to invoke _.values
 						#console.log 'ARGS', args
 						pm = plusMinus[func]
 						options[func] = {}
@@ -202,7 +202,7 @@ class Query
 					else
 						# several conditions on the same property are merged into the single object condition
 						search[key] = {} if search[key] is undefined
-						search[key][func] = args if typeof search[key] is 'object' and not _.isArray search[key]
+						search[key][func] = args if _.isObject search[key] and not _.isArray search[key]
 						# equality flushes all other conditions
 						search[key] = args if func is '$eq'
 			# TODO: add support for query expressions as Javascript
@@ -240,7 +240,7 @@ queryToString = (part) ->
 		encodeValue part
 
 encodeString = (s) ->
-	if typeof s is 'string'
+	if _.isString s
 		s = encodeURIComponent s
 		s = s.replace('(','%28').replace(')','%29') if s.match /[\(\)]/
 	s
@@ -251,7 +251,6 @@ encodeValue = (val) ->
 	else if typeof val is 'undefined'
 		return val
 	if val isnt converters.default('' + (val.toISOString and val.toISOString() or val.toString()))
-		type = typeof val
 		if _.isRegExp val
 			# TODO: control whether to we want simpler glob() style
 			val = val.toString()
@@ -263,11 +262,15 @@ encodeValue = (val) ->
 			type = 'epoch'
 			val = val.getTime()
 			encoded = true
-		else if type is 'string'
+		else if _.isString type
+			type = 'string'
 			val = encodeString val
 			encoded = true
+		else
+			# FIXME: not very robust
+			type = typeof val
 		val = [type, val].join ':'
-	val = encodeString val if not encoded and typeof val is 'string'
+	val = encodeString val if not encoded and _.isString val
 	val
 
 autoConverted =
@@ -322,7 +325,7 @@ converters =
 	RE: (x) ->
 		new RegExp decodeURIComponent(x)
 	glob: (x) ->
-		s = decodeURIComponent(x).replace(/([\\|\||\(|\)|\[|\{|\^|\$|\*|\+|\?|\.|\<|\>])/g, (x) -> '\\'+x
+		s = decodeURIComponent(x).replace /([\\|\||\(|\)|\[|\{|\^|\$|\*|\+|\?|\.|\<|\>])/g, (x) -> '\\'+x
 		s = s.replace(/\\\*/g,'.*').replace(/\\\?/g,'.?')
 		s = if s.substring(0,2) isnt '.*' then '^'+s else s.substring(2)
 		s = if s.substring(s.length-2) isnt '.*' then s+'$' else s.substring(0, s.length-2)
@@ -340,9 +343,11 @@ _.each ['eq', 'ne', 'le', 'ge', 'lt', 'gt', 'between', 'in', 'nin', 'contains', 
 			args: args
 		@
 
-parse = (query) ->
+parse = (query, parameters) ->
+	q = new Query query, parameters
+	return q
 	try
-		q = new Query query
+		q = new Query query, parameters
 	catch x
 		q = new Query
 		q.error = x.message
@@ -368,3 +373,191 @@ plusMinus =
 #
 _.mixin
 	rql: parse
+
+#################################################
+#
+# js-array
+#
+######
+
+jsOperatorMap =
+	'eq' : '==='
+	'ne' : '!=='
+	'le' : '<='
+	'ge' : '>='
+	'lt' : '<'
+	'gt' : '>'
+
+operators =
+
+	and: (obj, conditions...) ->
+		for cond in conditions
+			obj = cond obj
+		obj
+
+	or: (obj, conditions...) ->
+		list = []
+		for cond in conditions
+			list = list.concat cond obj
+		_.uniq list
+
+	limit: (list, limit, start = 0) ->
+		list.slice start, start + limit
+
+	slice: (list, start = 0, end = Infinity) ->
+		list.slice start, end
+
+	pick: (list, props...) ->
+		# compose select hash
+		include = []
+		exclude = []
+		_.each props, (x, index) ->
+			leading = if _.isArray x then x[0] else x
+			a = /([-+]*)(.+)/.exec leading
+			if _.isArray x then x[0] = a[2] else x = a[2]
+			if a[1].charAt(0) is '-'
+				exclude.push x
+			else
+				include.push x
+		# run filter
+		#console.log 'SELECT', include, exclude
+		_.map list, (item) ->
+			# handle inclusion
+			if _.isEmpty include
+				selected = _.clone item
+			else
+				selected = {}
+				for x in include
+					value = _.get item, x
+					#console.log 'DRILLING', x, value
+					continue if value is undefined
+					if _.isArray x
+						t = s = selected
+						n = x.slice(-1)
+						for i in x
+							t[i] ?= {}
+							s = t
+							t = t[i]
+						s[n] = value
+					else
+						selected[x] = value
+			#console.log 'INCLUDED', selected
+			# handle exclusion
+			for x in exclude
+				#console.log '-DRILLING', x
+				_.get selected, x, true
+			selected
+
+	sort: (list, props...) ->
+		order = []
+		_.each props, (x, index) ->
+			leading = if _.isArray x then x[0] else x
+			a = /([-+]*)(.+)/.exec leading
+			if _.isArray x then x[0] = a[2] else x = a[2]
+			if a[1].charAt(0) is '-'
+				order.push
+					attr: x
+					order: -1
+			else
+				order.push
+					attr: x
+					order: 1
+		# run sort
+		#console.log 'ORDER', order
+		list.sort (a, b) ->
+			for prop in order
+				#console.log 'COMPARE?', a, b, prop
+				va = _.get a, prop.attr
+				vb = _.get b, prop.attr
+				#console.log 'COMPARE!', va, vb, prop
+				return if va > vb then prop.order else -prop.order if va isnt vb
+			0
+
+	match: (list, prop, regex) ->
+		regex = new RegExp regex, 'i' unless _.isRegExp regex
+		_.select list, (x) -> regex.test _.get x, prop
+
+	in: (list, prop, values) ->
+		values = _.toArray values
+		_.select list, (x) -> _.include values, _.get x, prop
+
+	nin: (list, prop, values) ->
+		values = _.toArray values
+		_.select list, (x) -> not _.include values, _.get x, prop
+
+	contains: (list, prop, value) ->
+		_.select list, (x) -> _.include _.get(x, prop), value
+
+	ncontains: (list, prop, value) ->
+		_.select list, (x) -> not _.include _.get(x, prop), value
+
+	between: (list, prop, minInclusive, maxExclusive) ->
+		_.select list, (x) -> minInclusive <= _.get(x, prop) < maxExclusive
+
+	nbetween: (list, prop, minInclusive, maxExclusive) ->
+		_.select list, (x) -> not (minInclusive <= _.get(x, prop) < maxExclusive)
+
+operators.select = operators.pick
+operators.out = operators.nin
+operators.excludes = operators.ncontains
+operators.distinct = _.uniq
+
+query = (list, query, options = {}) ->
+
+	#console.log 'QUERY?', query
+	query = parse query, options.parameters
+	# parse error -- don't hesitate, return empty array
+	return [] if query.error
+	#console.log 'QUERY!', query
+
+	queryToJS = (value) ->
+		if _.isObject value
+			# FIXME: object and array simultaneously?!
+			if _.isArray value
+				'[' + _.map(value, queryToJS) + ']'
+			else
+				if jsOperatorMap.hasOwnProperty value.name
+					# item['foo.bar'] ==> item?.foo?.bar
+					path = value.args[0]
+					prm = value.args[1]
+					item = 'item'
+					if prm is undefined
+						prm = path
+					else if _.isArray path
+						escaped = []
+						for p in path
+							escaped.push JSON.stringify p
+							item += '&&item[' + escaped.join('][') + ']'
+					else
+						item += '&&item[' + JSON.stringify(path) + ']'
+					testValue = queryToJS prm
+					# N.B. regexp equality means match, inequality -- no match
+					if _.isRegExp testValue
+						condition = testValue + ".test(#{item})"
+						if value.name isnt 'eq'
+							condition = "!(#{condition})"
+					else
+						condition = item + jsOperatorMap[value.name] + testValue
+					#"_.select(list,function(item){return #{condition}})"
+					"function(list){return _.select(list,function(item){return #{condition};});}"
+				else if operators.hasOwnProperty value.name
+					#"operators.#{value.name}(" + ['list'].concat(_.map(value.args, queryToJS)).join(',') + ')'
+					"function(list){return operators.#{value.name}(" + ['list'].concat(_.map(value.args, queryToJS)).join(',') + ');}'
+				else
+					# unknown function -- don't hesitate, return empty
+					#"function(){return []}"
+					"function(list){return _.select(list,function(item){return false;});}"
+		else
+			# escape strings
+			if _.isString value then JSON.stringify(value) else value
+
+	#expr = ';(function(list){return ' + queryToJS(query) + '})(list);'
+	expr = queryToJS(query).slice(15, -1)
+	#console.log expr, list
+	if list then (new Function 'list, operators', expr) list, operators else expr
+
+#
+# mixin _
+#
+_.mixin
+	query: query

@@ -21,7 +21,7 @@ config =
 		#sslCert: 'cert.pem'
 		repl: true
 		pub:
-			dir: 'public'
+			dir: 'test'
 			ttl: 3600
 		stackTrace: true
 

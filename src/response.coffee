@@ -12,7 +12,7 @@ http.ServerResponse::send = (body, headers, status) ->
 
 	#console.log 'RESPONSE', body
 	# allow status as second arg
-	if typeof headers is 'number'
+	if _.isNumber headers
 		status = headers
 		headers = null
 	# defaults
@@ -82,7 +82,7 @@ http.ServerResponse::send = (body, headers, status) ->
 			else
 				mime = @headers['content-type']
 				body = serialize body, mime
-	else if typeof body is 'function'
+	else if _.isFunction body
 		@contentType '.js' unless @headers['content-type']
 		body = body.toString()
 	else

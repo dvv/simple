@@ -39,7 +39,7 @@ coerce = (value, type) ->
 				value = JSON.parse value
 			catch err
 	else if type is 'array'
-		value = if not value? or typeof value is 'object' then _.toArray value else [value]
+		value = if value? and typeof value isnt 'object' then [value] else _.toArray value
 	else if type is 'date'
 		date = new Date value
 		value = date unless _.isNaN date.getTime()
@@ -50,6 +50,11 @@ coerce = (value, type) ->
 #
 # we allow type coercion if options.coerce
 #
+
+#
+# TODO: introduce rename attribute -- id ---!get---> _id ---get---> id
+#
+
 validate = (instance, schema, options = {}, callback) ->
 
 	# FIXME: what it is?
@@ -65,7 +70,7 @@ validate = (instance, schema, options = {}, callback) ->
 	checkProp = (value, schema, path, i) ->
 
 		if path
-			if typeof i is 'number'
+			if _.isNumber i
 				path += '[' + i + ']'
 			else if typeof i is 'undefined'
 				path += ''

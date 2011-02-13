@@ -11,6 +11,8 @@ cloudhead/eyes.js/lib/eyes.js:eyes.js
 #
 #edtsech/underscore.string/lib/underscore.string.js:underscore.string.js
 #
+#documentcloud/underscore/underscore.js:../test/underscore.js
+#jquery/qunit/qunit:../test/qunit
 '
 
 #
@@ -55,4 +57,4 @@ done
 #
 # compile commonjs stuff
 #
-coffee -bc -o js src/rql.coffee src/validate.coffee
+coffee -bc -o lib src/*.coffee

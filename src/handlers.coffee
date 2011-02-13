@@ -107,7 +107,7 @@ module.exports.authCookie = (options = {}) ->
 		# define helper to set/clear secured cookie
 		require('http').ServerResponse::setSession = (session) ->
 			cookieOptions = path: '/', httpOnly: true
-			if typeof session is 'object'
+			if _.isObject session
 				# set the cookie
 				cookieOptions.expires = session.expires if session.expires
 				@setSecureCookie cookie, session.uid, cookieOptions
@@ -159,7 +159,7 @@ module.exports.jsonrpc = (options = {}) ->
 			(xxx, yyy, step) ->
 				#console.log 'PARSEDBODY', req.params
 				# pass errors to serializer
-				return step req.params if typeof req.params is 'string'
+				return step req.params if _.isString req.params
 				#
 				# parse the query
 				#
@@ -182,7 +182,7 @@ module.exports.jsonrpc = (options = {}) ->
 					# GET /Foo?query --> POST /Foo {method: 'query', params: [query]}
 					# GET /Foo/ID?query --> POST /Foo {method: 'get', params: [ID]}
 					#
-					# N.B. parts are decodeURIComponent'ed in _.drill
+					# N.B. parts are decodeURIComponent'ed in _.get
 					call =
 						jsonrpc: '2.0'
 						method: 'query'
@@ -245,7 +245,7 @@ module.exports.jsonrpc = (options = {}) ->
 				if parts[0] isnt ''
 					call.method = if call.method then [parts[0], call.method] else [parts[0]]
 				#console.log 'CALL', call
-				fn = _.drill context, call.method
+				fn = _.get context, call.method
 				if fn
 					args = if Array.isArray call.params then call.params else if call.params then [call.params] else []
 					args.unshift context

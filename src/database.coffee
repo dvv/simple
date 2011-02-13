@@ -64,7 +64,7 @@ class Database extends events.EventEmitter
 					# extend the store
 					if definition?.prototype
 						for own k, v of definition.prototype
-							store[k] = if typeof v is 'function' then v.bind store else v
+							store[k] = if _.isFunction v then v.bind store else v
 						delete definition.prototype
 					# define identification
 					Object.defineProperties store,
@@ -95,7 +95,6 @@ class Database extends events.EventEmitter
 			cursor.toArray (err, docs) ->
 				#console.log 'FOUND', arguments
 				return callback? err.message if err
-				ta = query.meta.toArray
 				for doc, i in docs
 					# _id -> id
 					doc.id = doc._id
@@ -103,7 +102,7 @@ class Database extends events.EventEmitter
 					# filter out protected fields
 					if schema
 						_.validate doc, schema, veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
-					docs[i] = _.toArray doc if ta
+				docs = _.map docs, _.values if query.meta.values
 				callback? null, docs
 		return
 
