@@ -172,7 +172,7 @@ validate = (instance, schema, options = {}, callback) ->
 					else
 						# simple array
 						addError 'enum' unless _.include enumeration, value
-				if _.isNumber schema.maxDecimal and (new RegExp("\\.[0-9]{#{(schema.maxDecimal+1)},}")).test value
+				if _.isNumber(schema.maxDecimal) and (new RegExp("\\.[0-9]{#{(schema.maxDecimal+1)},}")).test value
 					addError 'digits'
 		null
 
@@ -183,7 +183,6 @@ validate = (instance, schema, options = {}, callback) ->
 			if typeof instance isnt 'object' or _.isArray instance
 				errors.push property: path, message: 'type'
 			for own i, propDef of objTypeDef
-				#console.log 'PDEF: ' + i, propDef
 				value = instance[i]
 				# skip _not_ specified properties
 				continue if value is undefined and options.existingOnly
@@ -191,8 +190,8 @@ validate = (instance, schema, options = {}, callback) ->
 				if options.veto and (propDef.veto is true or typeof propDef.veto is 'object' and propDef.veto[options.flavor])
 					delete instance[i]
 					continue
-				# done with validation if it is called for 'get'
-				continue if options.flavor is 'get'
+				# done with validation if it is called for 'get' and no coercion needed
+				continue if options.flavor is 'get' and not options.coerce
 				# set default if validation called for 'add'
 				if value is undefined and propDef.default? and options.flavor is 'add'
 					value = instance[i] = propDef.default
@@ -212,13 +211,14 @@ validate = (instance, schema, options = {}, callback) ->
 			requires = objTypeDef[i]?.requires
 			if requires and not instance.hasOwnProperty requires
 				errors.push property: path, message: 'requires'
-			if additionalProp and not objTypeDef[i]
-				console.log 'ADDPROP', additionalProp, value, i, instance
+			# N.B. additional properties are validated only if schema is specified in additionalProperties
+			# otherwise they just go intact
+			if additionalProp?.type and not objTypeDef[i]
 				# coerce if coercion is enabled
 				if options.coerce and additionalProp.type
 					value = coerce value, additionalProp.type
 					instance[i] = value
-				checkProp value, additionalProp, path, i
+					checkProp value, additionalProp, path, i
 			if not _changing and value?.$schema
 				errors = errors.concat checkProp value, value.$schema, path, i
 		errors

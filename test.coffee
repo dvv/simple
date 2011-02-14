@@ -127,6 +127,9 @@ All {},
 			simple.handlers.mount 'GET', '/home', (req, res, next) ->
 				res.send 'GOT FROM HOME'
 
+			simple.handlers.mount 'GET', '/feed', (req, res, next) ->
+				res.redirect 'http://xurrency.com/usd/feed'
+
 			#simple.handlers.logRequest()
 
 			simple.handlers.jsonrpc()

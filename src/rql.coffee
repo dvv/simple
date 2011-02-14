@@ -448,6 +448,9 @@ operators =
 				_.get selected, x, true
 			selected
 
+	values: () ->
+		_.map operators.pick.apply(@, arguments), _.values
+
 	sort: (list, props...) ->
 		order = []
 		_.each props, (x, index) ->

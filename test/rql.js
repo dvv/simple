@@ -1,3 +1,17 @@
+function testSchema(data){
+	window.data = data = data.postalcodes;
+	console.log('TEST', data);
+	test("real data -- geonames postal code 17000", function(){
+		equals(_.query(data, 'countryCode=CZ').length, 4);
+		equals(_.query(data, _.rql().eq('placeName','Holešovice (část)')).length, 1);
+		deepEqual(_.query(data, _.rql('placeName=Hole%C5%A1ovice%20%28%C4%8D%C3%A1st%29,values(adminCode1)')), [["3100"]]);
+		//console.log(_.rql('placeName=string%3AHole%C5%A1ovice%2520%28%C4%8D%C3%A1st%29'));
+		equals(_.query(_.clone(data), 'countryCode=TR&sort(-placeName)').length, 13);
+		deepEqual(_.query(_.clone(data), 'countryCode=TR&sort(-placeName)&limit(2,2)&pick(placeName)'),
+			[{placeName: 'Kizilcaören Köyü'},{placeName: 'Kemalköy Köyü'}]);
+	});
+}
+
 // equality of queries `a` and `b`
 function deq(a, b, msg){
 	deepEqual(a.error, b.error, msg);
@@ -199,6 +213,8 @@ var data = [{
     var name = ['a/b','c.d'];
     equals(_.rql(_.rql().eq(name,1)+'')+'', 'eq((a%2Fb,c.d),1)');
     deepEqual(_.rql(_.rql().eq(name,1)+'').args[0].args[0], name);
+    // utf-8
+		deepEqual(_.rql('placeName=a=Hole%C5%A1ovice%20%28%C4%8D%C3%A1st%29').args[0].args[1], 'Holešovice (část)', 'utf-8 conversion');
 	});
 
 	module("Array");
@@ -216,9 +232,8 @@ var data = [{
 
 		//console.log(_.query(data, "excludes(tags,ne(fun))"), _.query(null, "excludes(tags,ne(fun))"));
 		// FIXME: failing!
-		/*
-		equals(_.query(data, "excludes(tags,ne(fun))").length, 1);
-		equals(_.query(data, "excludes(tags,ne(even))").length, 0);*/
+		//equals(_.query(data, "excludes(tags,ne(fun))").length, 1);
+		//equals(_.query(data, "excludes(tags,ne(even))").length, 0);
 
 		deepEqual(_.query(data, "match(price,10)"), [data[0]]);
 		deepEqual(_.query(data, "price=re:10"), [data[0]]);
@@ -251,7 +266,7 @@ var data = [{
 		deepEqual(_.query(data, 'a=2,b<4'), [data[0]], 'vanilla');
 		deepEqual(_.query(data, 'a=2,and(b<4)'), [data[0]], 'vanilla, extra and');
 		deepEqual(_.query(data, "a=2,b<4,pick(-b,a)"), [{a:2}], 'pick -/+');
-		deepEqual(_.query(data, 'or((pick(-b,a)&values(a/b/c)))'), [], 'pick -/+, values', 'fake or');
+		deepEqual(_.query(data, 'or((pick(-b,a)&values(a/b/c)))'), [[],[],[]], 'pick -/+, values', 'fake or');
 		deepEqual(_.query(data, 'a>1,b<4,pick(b,foo/bar,-foo/baz,+fo.ba),limit(1,1)'), [{b:0,foo:{bar: 'baz3'}}], 'pick deep properties, limit');
 		deepEqual(_.query(data, 'or(eq(a,2),eq(b,4)),pick(b)'), [{b: 2}, {b: 4}], 'truly or');
 		deepEqual(_.query(data, 'and(and(and(hasOwnProperty!=%22123)))'), data, 'attempt to access prototype -- noop');
@@ -265,12 +280,5 @@ var data = [{
 		deepEqual(_.query(data, 'between(foo/bar,baz1,baz3)'), [data[0], data[1]], 'between strings');
 		deepEqual(_.query(data, 'between(b,2,4)'), [data[0]], 'between numbers');
 	});
-
-	// TODO!
-	/*$.get('http://xurrency.com/usd/feed', function(xml){
-		test("real data -- xurrency", function(){
-			console.log(xml);
-		});
-	});*/
 
 });
