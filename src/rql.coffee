@@ -10,7 +10,7 @@ operatorMap =
 	'!=': 'ne'
 
 #
-# TODO: consider term be just array -- a[0] === term.name, a[1...] === term.args ?!
+# PERF?: consider term be just array -- a[0] === term.name, a[1...] === term.args ?!
 #
 
 class Query
@@ -478,11 +478,11 @@ operators =
 		_.select list, (x) -> regex.test _.get x, prop
 
 	in: (list, prop, values) ->
-		values = _.toArray values
+		values = _.ensureArray values
 		_.select list, (x) -> _.include values, _.get x, prop
 
 	nin: (list, prop, values) ->
-		values = _.toArray values
+		values = _.ensureArray values
 		_.select list, (x) -> not _.include values, _.get x, prop
 
 	contains: (list, prop, value) ->
@@ -502,6 +502,7 @@ operators.out = operators.nin
 operators.excludes = operators.ncontains
 operators.distinct = _.uniq
 
+# N.B. you should clone the array if you sort, since sorting affects the original
 query = (list, query, options = {}) ->
 
 	#console.log 'QUERY?', query

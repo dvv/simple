@@ -19,7 +19,7 @@ $(document).ready(function(){
 
 ///////////////////////////////////////
 //
-// data taken from kriszyp/rql tests
+// this data taken from kriszyp/rql tests
 //
 
 var queryPairs = {
@@ -190,7 +190,7 @@ var data = [{
     //assert.deepEqual(parsed, {name: 'and', args: [{name: 'eq', args: ['id1', /^abc\//]}]});
     ok(_.rql().eq('_1',/GGG(EE|FF)/i)+'' === 'eq(_1,re:GGG%28EE%7CFF%29)');
     parsed = _.rql('eq(_1,re:GGG%28EE%7CFF%29)');
-    console.log(parsed.args[0].args[1].toString() === /GGG(EE|FF)/i.toString());
+    equals(parsed.args[0].args[1].toString(), /GGG(EE|FF)/i.toString());
     //assert.ok(_.rql().eq('_1',/GGG(EE|FF)/)+'' === 'eq(_1,RE:GGG%28EE%7CFF%29)');
     // string to array and back
     var str = 'somefunc(and(1),(a,b),(10,(10,1)),(a,b.c))';
@@ -228,11 +228,49 @@ var data = [{
 	});
 
 	test("filtering #2", function(){
-		var data = [{"path.1":[1,2,3]}, {"path.1":[9,3,7]}];
+		var data = [{
+			"path.1":[1,2,3]
+		},{
+			"path.1":[9,3,7]
+		}];
 		deepEqual(_.query(data, "contains(path,3)&sort()"), []); // path is undefined
-		deepEqual(_.query(data, "contains(path.1,3)&sort()"), data); // 3 found in both
+		deepEqual(_.query(data, "contains(path.1,3)&sort(-path.1)"), [data[1], data[0]]); // 3 found in both
 		deepEqual(_.query(data, "excludes(path.1,3)&sort()"), []); // 3 found in both
 		deepEqual(_.query(data, "excludes(path.1,7)&sort()"), [data[0]]); // 7 found in second
 	});
+
+	test("filtering #3", function(){
+		var data = [{
+			a:2,b:2,c:1,foo:{bar:'baz1',baz:'raz'}
+		},{
+			a:1,b:4,c:1,foo:{bar:'baz2'}
+		},{
+			a:3,b:0,c:1,foo:{bar:'baz3'}
+		}];
+		deepEqual(_.query(data, ''), data, 'empty query');
+		deepEqual(_.query(data, 'a=2,b<4'), [data[0]], 'vanilla');
+		deepEqual(_.query(data, 'a=2,and(b<4)'), [data[0]], 'vanilla, extra and');
+		deepEqual(_.query(data, "a=2,b<4,pick(-b,a)"), [{a:2}], 'pick -/+');
+		deepEqual(_.query(data, 'or((pick(-b,a)&values(a/b/c)))'), [], 'pick -/+, values', 'fake or');
+		deepEqual(_.query(data, 'a>1,b<4,pick(b,foo/bar,-foo/baz,+fo.ba),limit(1,1)'), [{b:0,foo:{bar: 'baz3'}}], 'pick deep properties, limit');
+		deepEqual(_.query(data, 'or(eq(a,2),eq(b,4)),pick(b)'), [{b: 2}, {b: 4}], 'truly or');
+		deepEqual(_.query(data, 'and(and(and(hasOwnProperty!=%22123)))'), data, 'attempt to access prototype -- noop');
+		deepEqual(_.query(_.clone(data), 'sort(c,-foo/bar,foo/baz)'), [data[2], data[1], data[0]], 'sort');
+		deepEqual(_.query(data, 'match(foo/bar,z3)'), [data[2]], 'match');
+		deepEqual(_.query(data, 'foo/bar!=re:z3'), [data[0], data[1]], 'non-match');
+		deepEqual(_.query(data, 'foo/baz=re:z'), [data[0]], 'implicit match');
+		deepEqual(_.query(data, 'in(foo/bar,(baz1))'), [data[0]], 'occurance');
+		deepEqual(_.query(data, 'in(foo/bar,baz2)'), [data[1]], 'occurance in non-array');
+		deepEqual(_.query(data, 'nin(foo/bar,baz2)'), [data[0], data[2]], 'non-occurance in non-array');
+		deepEqual(_.query(data, 'between(foo/bar,baz1,baz3)'), [data[0], data[1]], 'between strings');
+		deepEqual(_.query(data, 'between(b,2,4)'), [data[0]], 'between numbers');
+	});
+
+	// TODO!
+	/*$.get('http://xurrency.com/usd/feed', function(xml){
+		test("real data -- xurrency", function(){
+			console.log(xml);
+		});
+	});*/
 
 });

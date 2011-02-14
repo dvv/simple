@@ -21,6 +21,8 @@
 #
 # given `value`, try to coerce it to `type`
 #
+# FIXME: we should skip conversion if type is matched?
+#
 coerce = (value, type) ->
 	if type is 'string'
 		value = if value then ''+value else ''
@@ -39,7 +41,7 @@ coerce = (value, type) ->
 				value = JSON.parse value
 			catch err
 	else if type is 'array'
-		value = if value? and typeof value isnt 'object' then [value] else _.toArray value
+		value = _.ensureArray value
 	else if type is 'date'
 		date = new Date value
 		value = date unless _.isNaN date.getTime()
@@ -72,7 +74,7 @@ validate = (instance, schema, options = {}, callback) ->
 		if path
 			if _.isNumber i
 				path += '[' + i + ']'
-			else if typeof i is 'undefined'
+			else if i is undefined
 				path += ''
 			else
 				path += '.' + i
@@ -83,9 +85,8 @@ validate = (instance, schema, options = {}, callback) ->
 			errors.push property: path, message: message
 
 		if (typeof schema isnt 'object' or _.isArray schema) and (path or typeof schema isnt 'function') and not schema?.type
-			if typeof schema is 'function'
-				if value not instanceof schema
-					addError 'type'
+			if _.isFunction schema
+				addError 'type' unless value instanceof schema
 			else if schema
 				addError 'invalid'
 			return null
@@ -99,6 +100,7 @@ validate = (instance, schema, options = {}, callback) ->
 		# validate a value against a type definition
 		checkType = (type, value) ->
 			if type
+				# TODO: coffee-ize, underscore-ize
 				if typeof type is 'string' and type isnt 'any' and
 						`(type == 'null' ? value !== null : typeof value != type) &&
 						!(value instanceof Array && type == 'array') &&
@@ -136,7 +138,7 @@ validate = (instance, schema, options = {}, callback) ->
 						for v, i in value
 							if itemsIsArray
 								propDef = schema.items[i]
-							if options.coerce
+							if options.coerce and propDef.type
 								value[i] = coerce v, propDef.type
 							errors.concat checkProp v, propDef, path, i
 					if schema.minItems and value.length < schema.minItems
@@ -145,21 +147,21 @@ validate = (instance, schema, options = {}, callback) ->
 						addError 'maxItems'
 				else if schema.properties or schema.additionalProperties
 					errors.concat checkObj value, schema.properties, path, schema.additionalProperties
-				if typeof value is 'string'
+				if _.isString value
 					if schema.pattern and not value.match schema.pattern
 						addError 'pattern'
 					if schema.maxLength and value.length > schema.maxLength
 						addError 'maxLength'
 					if schema.minLength and value.length < schema.minLength
 						addError 'minLength'
-				if typeof schema.minimum isnt undefined and typeof value is typeof schema.minimum and schema.minimum > value
+				if schema.minimum isnt undefined and typeof value is typeof schema.minimum and schema.minimum > value
 					addError 'minimum'
-				if typeof schema.maximum isnt undefined and typeof value is typeof schema.maximum and schema.maximum < value
+				if schema.maximum isnt undefined and typeof value is typeof schema.maximum and schema.maximum < value
 					addError 'maximum'
 				if schema.enum
 					enumeration = schema.enum
 					# if function specified, distinguish between async and sync flavors
-					if typeof enumeration is 'function'
+					if _.isFunction enumeration
 						# async validator
 						if enumeration.length is 2
 							asyncs.push value: value, path: path, fetch: enumeration
@@ -170,17 +172,18 @@ validate = (instance, schema, options = {}, callback) ->
 					else
 						# simple array
 						addError 'enum' unless _.include enumeration, value
-				if typeof schema.maxDecimal is 'number' and (value.toString().match(new RegExp("\\.[0-9]{" + (schema.maxDecimal + 1) + ",}")))
+				if _.isNumber schema.maxDecimal and (new RegExp("\\.[0-9]{#{(schema.maxDecimal+1)},}")).test value
 					addError 'digits'
 		null
 
 	# validate an object against a schema
 	checkObj = (instance, objTypeDef, path, additionalProp) ->
 
-		if typeof objTypeDef is 'object'
+		if _.isObject objTypeDef
 			if typeof instance isnt 'object' or _.isArray instance
 				errors.push property: path, message: 'type'
 			for own i, propDef of objTypeDef
+				#console.log 'PDEF: ' + i, propDef
 				value = instance[i]
 				# skip _not_ specified properties
 				continue if value is undefined and options.existingOnly
@@ -194,23 +197,25 @@ validate = (instance, schema, options = {}, callback) ->
 				if value is undefined and propDef.default? and options.flavor is 'add'
 					value = instance[i] = propDef.default
 				# coerce if coercion is enabled
-				if options.coerce and i of instance
+				if options.coerce and propDef.type and instance.hasOwnProperty i
 					value = coerce value, propDef.type
 					instance[i] = value
 				checkProp value, propDef, path, i
 
 		for i, value of instance
-			if instance.hasOwnProperty(i) and objTypeDef and not objTypeDef[i] and (additionalProp is false or options.removeAdditionalProps)
+			if instance.hasOwnProperty(i) and not objTypeDef[i] and (additionalProp is false or options.removeAdditionalProps)
 				if options.removeAdditionalProps
 					delete instance[i]
 					continue
 				else
 					errors.push property: path, message: 'unspecifed'
-			requires = objTypeDef?[i]?.requires
-			if requires and not requires of instance
+			requires = objTypeDef[i]?.requires
+			if requires and not instance.hasOwnProperty requires
 				errors.push property: path, message: 'requires'
-			if additionalProp and (not (objTypeDef and typeof objTypeDef is 'object') or not (i of objTypeDef))
-				if options.coerce
+			if additionalProp and not objTypeDef[i]
+				console.log 'ADDPROP', additionalProp, value, i, instance
+				# coerce if coercion is enabled
+				if options.coerce and additionalProp.type
 					value = coerce value, additionalProp.type
 					instance[i] = value
 				checkProp value, additionalProp, path, i

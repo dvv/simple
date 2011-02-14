@@ -96,4 +96,6 @@ and
 #console.log _.toHash [{a:1}, {a:2}, {a:3}], 'a'
 #console.log aaa [1, false, {a:1}, {foo:{bar:'baz'}}]
 
-console.log _.rql 'match(name,glob:f*)'
+#console.log _.rql 'match(name,glob:f*)'
+
+console.log '[' + decodeURIComponent(4) + ']'

@@ -1,36 +1,29 @@
 # TODO: as a separate lib
 
-#_.mixin require '../node/underscore.string'
-
 _.mixin
 
-	isObject: (value) -> value and typeof value is 'object'
+	#
+	# naive check if `value` is an object
+	#
+	isObject: (value) ->
+		value and typeof value is 'object'
 
-	# kick off properties mentioned in fields from obj
-	# FIXME: should be just schema!
-	veto: (obj, fields) ->
-		for k in fields
-			if _.isString k
-				delete obj[k] if obj
-				#obj[k] = undefined
-			else if _.isArray k
-				k1 = k.shift()
-				v1 = obj[k1]
-				if _.isArray v1
-					obj[k1] = v1.map (x) -> _.veto(x, if k.length > 1 then [k] else k)
-				else if v1
-					obj[k1] = _.veto(v1, if k.length > 1 then [k] else k)
-		obj
+	#
+	# ensure passed `value` is an array; make the array of the single
+	# item `value` otherwise
+	#
+	ensureArray: (value) ->
+		return (if value is undefined then [] else [value]) unless value
+		return [value] if _.isString value
+		_.toArray value
 
 	#
 	# deep freeze an object
 	#
 	freeze: (obj) ->
 		if _.isObject obj
-			#console.log 'FREEZING', obj
 			Object.freeze obj
-			_.each obj, (v, k) ->
-				_.freeze v
+			_.each obj, (v, k) -> _.freeze v
 		obj
 
 	#
@@ -51,26 +44,31 @@ _.mixin
 		Object.freeze facet
 
 	#
-	# drill down object properties specified by path
+	# drill down along object properties specified by path
+	# removes the said property and return mangled object if `remove` is truthy
 	#
 	# _.get({a:{b:{c:[0,2,4]}}},['a','b','c',2]) ---> 4
-	# TODO: _.get({a:{b:{get:function(attr){return{c:[0,2,4]}[attr];}}}},['a','b','c',2]) ---> 4
+	# TODO: _.get({a:{b:{$ref:function(attr){return{c:[0,2,4]}[attr];}}}},['a','b','c',2]) ---> 4
+	# TODO: _.get({a:{b:{$ref:function(err, result){return next(err, {c:[0,2,4]}[attr]);}}}},['a','b','c',2], next)
 	#
 	get: (obj, path, remove) ->
+		# path as array specifies drilldown steps
 		if _.isArray path
 			if remove
 				[path..., name] = path
 				orig = obj
 				for part, index in path
-					obj = obj and obj[if _.isNumber part then part else decodeURIComponent part]
+					obj = obj and obj[decodeURIComponent part]
 				delete obj[name] if obj?[name]
 				orig
 			else
 				for part in path
-					obj = obj and obj[if _.isNumber part then part else decodeURIComponent part]
+					obj = obj and obj[decodeURIComponent part]
 				obj
-		else if path is 'undefined'
+		# no path means no drill
+		else if path is undefined
 			obj
+		# ordinal path means one drilldown step
 		else
 			if remove
 				delete obj[decodeURIComponent path]
@@ -79,22 +77,18 @@ _.mixin
 				obj[decodeURIComponent path]
 
 	###
-	#
-	# drill down object properties specified by path
-	#
-	drill: (obj, path) ->
-		_drill = (obj, path) ->
-			return obj unless obj and path?
-			if _.isArray path
-				_.each path, (part) ->
-					obj = obj and _drill obj, part
-				obj
-			else if typeof path is 'undefined'
-				obj
-			else
-				attr = if _.isNumber path then path else decodeURIComponent path
-				# FIXME: false .get() in models, .get() requires wait()
-				#obj.get and obj.get(attr) or obj[attr]
-				obj[attr]
-		_drill obj, path
+	# kick off properties mentioned in fields from obj
+	# _.veto {a:{b:{c:'d',e:'f'}}}, ['a','b','e']} --> {a:{b:{c:'d'}}}
+	veto: (obj, fields...) ->
+		for k in fields
+			if _.isString k
+				delete obj[k] if obj
+			else if _.isArray k
+				k1 = k.shift()
+				v1 = obj[k1]
+				if _.isArray v1
+					obj[k1] = v1.map (x) -> _.veto(x, if k.length > 1 then [k] else k)
+				else if v1
+					obj[k1] = _.veto(v1, if k.length > 1 then [k] else k)
+		obj
 	###

@@ -140,7 +140,7 @@ class Database extends events.EventEmitter
 				#console.error 'BEFOREADD', document, schema
 				# validate document
 				if schema
-					_.validate.call context, document, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add', coerce: true}, next
+					_.validate.call context, document, schema, {veto: true, removeAdditionalProps: not schema.additionalProperties, flavor: 'add', coerce: true}, next
 				else
 					next null, document
 			(err, document, next) ->
@@ -177,7 +177,7 @@ class Database extends events.EventEmitter
 					delete result._id
 					# filter out protected fields
 					if schema
-						_.validate result, schema, veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
+						_.validate result, schema, veto: true, removeAdditionalProps: not schema.additionalProperties, flavor: 'get'
 					callback? null, result
 					#self.emit 'add',
 					#	collection: collection
