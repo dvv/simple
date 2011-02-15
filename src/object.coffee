@@ -50,6 +50,16 @@ _.mixin
 		_.toArray value
 
 	#
+	# converts a `list` of objects to hash keyed by `field` in objects
+	#
+	toHash: (list, field) ->
+		r = {}
+		_.each list, (x) ->
+			f = _.get x, field
+			r[f] = x
+		r
+
+	#
 	# deep freeze an object
 	#
 	freeze: (obj) ->

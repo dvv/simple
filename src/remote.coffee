@@ -19,7 +19,8 @@ parseLocation = (url, next) ->
 		port: req.port or 80
 		path: req.pathname
 		headers: {}
-	if proxy = parseUrl process.env.http_proxy
+	if process.env.http_proxy
+		proxy = parseUrl process.env.http_proxy
 		req.headers.host = req.host
 		req.port = proxy.port or 80
 		req.host = proxy.hostname

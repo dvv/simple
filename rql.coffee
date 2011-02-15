@@ -11,6 +11,7 @@ console.log = (args...) ->
 	for a in args
 		console.error sys.inspect a, false, 10
 
+###
 fetchCourses = (referenceCurrency = 'usd', next) ->
 	parseHTML "http://xurrency.com/#{referenceCurrency.toLowerCase()}/feed", (err, dom) ->
 		course = _.map dom[1].children, (rec) ->
@@ -22,3 +23,6 @@ fetchCourses = (referenceCurrency = 'usd', next) ->
 		next err, course
 
 fetchCourses 'usd', console.log
+###
+
+console.log _.query [{val:2000},{val:1}], '(val%3E1000)'

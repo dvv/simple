@@ -393,13 +393,13 @@ operators =
 
 	and: (obj, conditions...) ->
 		for cond in conditions
-			obj = cond obj
+			obj = cond(obj) if _.isFunction cond
 		obj
 
 	or: (obj, conditions...) ->
 		list = []
 		for cond in conditions
-			list = list.concat cond obj
+			list = list.concat(cond(obj)) if _.isFunction cond
 		_.uniq list
 
 	limit: (list, limit, start = 0) ->
@@ -558,7 +558,7 @@ query = (list, query, options = {}) ->
 
 	#expr = ';(function(list){return ' + queryToJS(query) + '})(list);'
 	expr = queryToJS(query).slice(15, -1)
-	#console.log expr, list
+	#console.log expr #, list
 	if list then (new Function 'list, operators', expr) list, operators else expr
 
 #

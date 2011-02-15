@@ -12,6 +12,12 @@ $(document).ready(function(){
 		deepEqual(_.get(_.clone(obj), ['a','non','existing','d',1], true), obj, 'remove deep property');
 	});
 
+	test('toHash', function(){
+		var obj = [{a:1,b:2,c:{d:'foo'}},{a:2,b:3,c:{d:'bar'}},{a:3,b:4,c:{d:'baz'}}];
+		deepEqual(_.toHash(obj, 'a'), {1:{a:1,b:2,c:{d:'foo'}},2:{a:2,b:3,c:{d:'bar'}},3:{a:3,b:4,c:{d:'baz'}}}, 'shallow toHash');
+		deepEqual(_.toHash(obj, ['c','d']), {foo:{a:1,b:2,c:{d:'foo'}},bar:{a:2,b:3,c:{d:'bar'}},baz:{a:3,b:4,c:{d:'baz'}}}, 'deep toHash');
+	});
+
 	test('proxy', function(){
 		var obj = {action: function(x){return 'acted';}, deep: {action: function(x){return 'acted from deep';}}, private: function(){return 'hidden';}};
 		deepEqual(_.proxy(obj, ['action']), {action: obj.action}, 'simple');

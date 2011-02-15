@@ -79,7 +79,10 @@ schema.Course =
 			type: 'string'
 		cur:
 			type: 'string'
-		val:
+			pattern: /^[A-Z]{3}$/
+		name:
+			type: 'string'
+		value:
 			type: 'number'
 		date:
 			type: 'date'
@@ -100,15 +103,24 @@ PermissiveFacet = (obj, plus...) ->
 	expose = expose.concat plus if plus.length
 	_.proxy obj, expose
 
-fetchCourses = (referenceCurrency = 'usd', next) ->
+fetchCourses = (referenceCurrency = 'usd', query, next) ->
 	require('./src/remote').parseLocation "http://xurrency.com/#{referenceCurrency.toLowerCase()}/feed", (err, dom) ->
 		course = _.map dom[1].children, (rec) ->
 			cur: rec.children[9]?.children[0].data
-			val: +rec.children[10]?.children[0].data
+			value: +rec.children[10]?.children[0].data
 			date: Date rec.children[4]?.children[0].data
-		course[0].cur = referenceCurrency.toLowerCase()
-		course[0].val = 1
-		next err, course
+		course[0].cur = referenceCurrency.toUpperCase()
+		course[0].value = 1
+		course = _.toHash course, 'cur'
+		require('./src/remote').parseLocation 'http://xurrency.com/currencies', (err, dom) ->
+			currs = dom[1].children[1].children[0].children[1].children[0].children[4].children.slice(1)
+			_.each currs, (rec) ->
+				x = rec.children[1].children[0]
+				course[x.attribs.href.substring(1).toUpperCase()]?.name = x.children[0].data
+			#console.log course
+			#process.exit 0
+			course = _.toArray course
+			next err, _.query(course, query)
 
 #
 # setup and run the server
@@ -139,7 +151,7 @@ All {},
 		#
 		if not process.env._WID_
 			model.Course.remove {user: {id:'root'}}, 'a!=b', () ->
-				fetchCourses 'usd', (err, courses) ->
+				fetchCourses null, null, (err, courses) ->
 					#console.log 'FETCHED', courses.length
 					_.each courses, (curr) ->
 						model.Course.add {user: {id:'root'}}, curr
@@ -180,7 +192,10 @@ All {},
 				res.send 'GOT FROM HOME'
 
 			simple.handlers.mount 'GET', '/feed', (req, res, next) ->
-				res.redirect 'http://xurrency.com/usd/feed'
+				#console.log req.location.search
+				query = _.rql decodeURI(req.location.search or '')
+				fetchCourses 'rub', query, (err, result) ->
+					res.send err or result
 
 			#simple.handlers.logRequest()
 
