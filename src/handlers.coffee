@@ -163,15 +163,16 @@ module.exports.jsonrpc = (options = {}) ->
 				#
 				# parse the query
 				#
-				search = req.location.search or ''
+				search = decodeURI(req.location.search or '')
+				#console.log 'QUERY?', search
 				query = _.rql search
-				#console.log 'QUERY', query
+				#console.log 'QUERY!', query
 				return step query.error if query.error
 				#
 				# find the method which will handle the request
 				#
 				method = req.method
-				parts = req.location.pathname.substring(1).split '/'
+				parts = _.map req.location.pathname.substring(1).split('/'), (x) -> decodeURIComponent x
 				data = req.params
 				context = req.context
 				#
@@ -182,7 +183,6 @@ module.exports.jsonrpc = (options = {}) ->
 					# GET /Foo?query --> POST /Foo {method: 'query', params: [query]}
 					# GET /Foo/ID?query --> POST /Foo {method: 'get', params: [ID]}
 					#
-					# N.B. parts are decodeURIComponent'ed in _.get
 					call =
 						jsonrpc: '2.0'
 						method: 'query'

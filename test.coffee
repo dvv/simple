@@ -5,6 +5,11 @@ process.argv.shift() # still report 'node' as argv[0]
 
 simple = require './src'
 
+sys = require 'util'
+console.log = (args...) ->
+	for a in args
+		console.error sys.inspect a, false, 10
+
 #
 # configuration
 #
@@ -46,6 +51,7 @@ config =
 # DB model definitions
 #
 schema = {}
+
 schema.Language =
 	type: 'object'
 	additionalProperties: false # seal the schema -- allow only explicitly defined properties
@@ -59,9 +65,34 @@ schema.Language =
 			type: 'string'
 		localName:
 			type: 'string'
+
+schema.Geo =
+	type: 'object'
+	additionalProperties: true
+	properties: {}
+
+schema.Course =
+	type: 'object'
+	additionalProperties: false
+	properties:
+		id:
+			type: 'string'
+		cur:
+			type: 'string'
+		val:
+			type: 'number'
+		date:
+			type: 'date'
+
 #
 # ...
 #
+
+RestrictiveFacet = (obj, plus...) ->
+	# register permissive facet -- set of entity getters
+	expose = ['schema', 'id', 'query', 'get']
+	expose = expose.concat plus if plus.length
+	_.proxy obj, expose
 
 PermissiveFacet = (obj, plus...) ->
 	# register permissive facet -- set of entity accessors
@@ -69,6 +100,15 @@ PermissiveFacet = (obj, plus...) ->
 	expose = expose.concat plus if plus.length
 	_.proxy obj, expose
 
+fetchCourses = (referenceCurrency = 'usd', next) ->
+	require('./src/remote').parseLocation "http://xurrency.com/#{referenceCurrency.toLowerCase()}/feed", (err, dom) ->
+		course = _.map dom[1].children, (rec) ->
+			cur: rec.children[9]?.children[0].data
+			val: +rec.children[10]?.children[0].data
+			date: Date rec.children[4]?.children[0].data
+		course[0].cur = referenceCurrency.toLowerCase()
+		course[0].val = 1
+		next err, course
 
 #
 # setup and run the server
@@ -91,6 +131,18 @@ All {},
 
 		facet =
 			Language: PermissiveFacet model.Language
+			Geo: RestrictiveFacet model.Geo
+			Course: RestrictiveFacet model.Course
+
+		#
+		# fill the DB
+		#
+		if not process.env._WID_
+			model.Course.remove {user: {id:'root'}}, 'a!=b', () ->
+				fetchCourses 'usd', (err, courses) ->
+					#console.log 'FETCHED', courses.length
+					_.each courses, (curr) ->
+						model.Course.add {user: {id:'root'}}, curr
 
 		#
 		# app should provide for .getContext(uid, next) -- the method to retrieve
@@ -145,7 +197,6 @@ All {},
 
 		#
 		# run the application
-		#
 		#
 		simple.run handler, config.server
 

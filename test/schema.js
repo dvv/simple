@@ -7,7 +7,7 @@ $(document).ready(function(){
 	(function(){
 	var schema, obj;
 
-	module("Validate: additionalProperties=false");
+	module('Validate: additionalProperties=false');
 
 	schema = {
 		type: 'object',
@@ -40,7 +40,7 @@ $(document).ready(function(){
 		additionalProperties: false
 	};
 
-	test("add", function(){
+	test('add', function(){
 		obj = {id: 'bac', foo: '4', bar: 'vareniki', spam: true};
 		equals(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add', coerce: true}),
 			null, 'coerced and added ok');
@@ -51,7 +51,7 @@ $(document).ready(function(){
 			[{property: 'id', message: 'pattern'}, {'property': 'foo', 'message': 'type'}, {'property': 'bar[0]', 'message': 'enum'}], 'validate for "add"');
 	});
 
-	test("update", function(){
+	test('update', function(){
 		obj = {id: 'bac', foo1: '5', bar: ['eli', 'eniki']};
 		deepEqual(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update', coerce: true}),
 			null, 'validate for "update" nak: required');
@@ -62,7 +62,7 @@ $(document).ready(function(){
 		deepEqual(obj, {foo: 5, bar: ['eli', 'eniki']}, 'validate for "update" ok');
 	});
 
-	test("get", function(){
+	test('get', function(){
 		obj = {id: 'bac', foo: '5', bar: ['eli', 'eniki'], secret: true};
 		deepEqual(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'}),
 			null, 'validate for "get" ok');
@@ -78,7 +78,7 @@ $(document).ready(function(){
 	(function(){
 	var schema, obj;
 
-	module("Validate: additionalProperties=true");
+	module('Validate: additionalProperties=true');
 
 	schema = {
 		type: 'object',
@@ -111,7 +111,7 @@ $(document).ready(function(){
 		additionalProperties: true
 	};
 
-	test("add", function(){
+	test('add', function(){
 		obj = {id: 'bac', foo: '4', bar: 'vareniki', spam: true};
 		equals(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add', coerce: true}),
 			null, 'coerced and added ok');
@@ -121,7 +121,7 @@ $(document).ready(function(){
 			[{property: 'id', message: 'pattern'}, {'property': 'foo', 'message': 'type'}, {'property': 'bar[0]', 'message': 'enum'}], 'validate for "add"');
 	});
 
-	test("update", function(){
+	test('update', function(){
 		obj = {id: 'bac', foo1: '5', bar: ['eli', 'eniki']};
 		deepEqual(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update', coerce: true}),
 			null, 'validate for "update" nak: required');
@@ -132,7 +132,7 @@ $(document).ready(function(){
 		deepEqual(obj, {foo: 5, bar: ['eli', 'eniki']}, 'validate for "update" ok');
 	});
 
-	test("get", function(){
+	test('get', function(){
 		obj = {id: 'bac', foo: '5', bar: ['eli', 'eniki'], secret: true};
 		deepEqual(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'}),
 			null, 'validate for "get" ok');
@@ -148,7 +148,7 @@ $(document).ready(function(){
 	(function(){
 	var schema, obj;
 
-	module("Validate: additionalProperties=schema");
+	module('Validate: additionalProperties=schema');
 
 	schema = {
 		type: 'object',
@@ -184,7 +184,7 @@ $(document).ready(function(){
 		}
 	};
 
-	test("add", function(){
+	test('add', function(){
 		obj = {id: 'bac', foo: '4', bar: 'vareniki', spam: true};
 		equals(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add', coerce: true}),
 			null, 'coerced and added ok');
@@ -194,7 +194,7 @@ $(document).ready(function(){
 			[{property: 'id', message: 'pattern'}, {'property': 'foo', 'message': 'type'}, {'property': 'bar[0]', 'message': 'enum'}], 'validate for "add"');
 	});
 
-	test("update", function(){
+	test('update', function(){
 		obj = {id: 'bac', foo1: '5.111', bar: ['eli', 'eniki']};
 		deepEqual(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, existingOnly: true, flavor: 'update', coerce: true}),
 			[{property: 'foo1', message: 'digits'}], 'validate for "update" nak: digits');
@@ -208,7 +208,7 @@ $(document).ready(function(){
 		deepEqual(obj, {foo: 5, bar: ['eli', 'eniki']}, 'validate for "update" ok');
 	});
 
-	test("get", function(){
+	test('get', function(){
 		obj = {id: 'bac', foo: '5', bar: ['eli', 'eniki'], secret: true};
 		deepEqual(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'}),
 			null, 'validate for "get" ok');

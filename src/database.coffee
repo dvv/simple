@@ -84,10 +84,12 @@ class Database extends events.EventEmitter
 	# return the list of documents matching `query`; attributes are filtered by optional `schema`
 	#
 	query: (collection, schema, context, query, callback) ->
+		#console.log 'FIND??', query, @attrInactive
 		query = _.rql(query)
 		# skip documents marked as deleted
 		if @attrInactive
 			query = query.ne(@attrInactive,true)
+		#console.log 'FIND?', query
 		query = query.toMongo()
 		#console.log 'FIND!', query
 		@collections[collection].find query.search, query.meta, (err, cursor) ->

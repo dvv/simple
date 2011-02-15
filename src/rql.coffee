@@ -119,7 +119,7 @@ class Query
 				return unless func and args
 				# http://www.mongodb.org/display/DOCS/Querying
 				# nested terms? -> recurse
-				if _.isString args[0]?.name and _.isArray args[0].args
+				if _.isString(args[0]?.name) and _.isArray(args[0].args)
 					if _.include valid_operators, func
 						nested = walk func, args
 						search['$'+func] = nested
@@ -185,7 +185,7 @@ class Query
 					else
 						#console.log 'CUSTOM', func, valid_funcs, args
 						# N.B. here we encountered a custom function
-						return search
+						return
 					# $or requires an array of conditions
 					#console.log 'COND', search, name, key, func, args
 					if name is 'or'
@@ -202,9 +202,10 @@ class Query
 					else
 						# several conditions on the same property are merged into the single object condition
 						search[key] = {} if search[key] is undefined
-						search[key][func] = args if _.isObject search[key] and not _.isArray search[key]
+						search[key][func] = args if _.isObject(search[key]) and not _.isArray(search[key])
 						# equality flushes all other conditions
 						search[key] = args if func is '$eq'
+				return
 			# TODO: add support for query expressions as Javascript
 			# TODO: add support for server-side functions
 			#console.log 'OUT', search

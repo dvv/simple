@@ -1,7 +1,7 @@
 function testSchema(data){
-	window.data = data = data.postalcodes;
-	console.log('TEST', data);
-	test("real data -- geonames postal code 17000", function(){
+	data = data.postalcodes;
+	//console.log('TEST', data);
+	test("real data -- geonames of postal code 17000", function(){
 		equals(_.query(data, 'countryCode=CZ').length, 4);
 		equals(_.query(data, _.rql().eq('placeName','Holešovice (část)')).length, 1);
 		deepEqual(_.query(data, _.rql('placeName=Hole%C5%A1ovice%20%28%C4%8D%C3%A1st%29,values(adminCode1)')), [["3100"]]);
@@ -186,6 +186,28 @@ var data = [{
             deq(parsed, result, group + ": " + key + " " + serialized);
         });
     }
+	});
+
+	test("toMongo()", function(){
+		//console.log(_.rql('a!=b').toMongo());
+		//deq(_.rql('a!=b'), {name: 'and', args: [{name: 'ne', args: ['a', 'b']}]});
+		deepEqual(_.rql('a!=b').toMongo(), {meta: {}, search: {a: {$ne: 'b'}}});
+		deepEqual(_.rql('a!=b,in(c,(d,e,f)),b!=re:re,limit(1,2),sort(-a/b/c,+c.d.e)&select(u,f.h.c,-f/g/h)').toMongo(),
+			{meta: {skip: 2, limit: 1, needCount: true, sort: {'a.b.c': -1, 'c.d.e': 2}, fields: {u: 1, 'f.h.c': 2, 'f.g.h': 0}}, search: {a: {$ne: 'b'}, c: {$in: ['d','e','f']}, b: {$not: /re/i}}});
+		//console.log(_.rql('(a!=b|in(c,(d,e,f)),b!=re:re),limit(1,2),sort(-a/b/c,+c.d.e)&select(u,f.h.c,-f/g/h)').toMongo());
+		deq(_.rql('(a!=b|in(c,(d,e,f)),b!=re:re),limit(1,2),sort(-a/b/c,+c.d.e)&select(u,f.h.c,-f/g/h)'),
+			{name: 'and', args: [{name: 'or', args: [
+				{name: 'ne', args: ['a', 'b']},
+				{name: 'in', args: ['c', ['d', 'e', 'f']]},
+				{name: 'ne', args: ['b', /re/i]}
+			]},
+			{name: 'limit', args: [1, 2]},
+			{name: 'sort', args: [['-a', 'b', 'c'], '+c.d.e']},
+			{name: 'select', args: ['u', 'f.h.c', ['-f', 'g', 'h']]}
+			]});
+		deepEqual(_.rql('(a!=b|in(c,(d,e,f)),b!=re:re),limit(1,2),sort(-a/b/c,+c.d.e)&select(u,f.h.c,-f/g/h)').toMongo(),
+			{meta: {skip: 2, limit: 1, needCount: true, sort: {'a.b.c': -1, 'c.d.e': 2}, fields: {u: 1, 'f.h.c': 2, 'f.g.h': 0}}, search: {$or: [{a: {$ne: 'b'}}, {c: {$in: ['d','e','f']}}, {b: {$not: /re/i}}]}});
+		deepEqual(_.rql('sort(-val),(val>1000|val<1)').toMongo(), {meta: {sort: {val: -1}}, search: {$or: [{val: {$gt: 1000}}, {val: {$lt: 1}}]}});
 	});
 
 	test("binding parameters", function(){

@@ -31,9 +31,11 @@ Run:
 
     ./install
 
-## Example
+## Example and test
 
-    ./example.coffee
+    ./test.coffee
+
+and point your browser to http://127.0.0.1:3000
 
 or [here](https://github.com/dvv/simple-example)
 

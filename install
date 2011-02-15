@@ -8,6 +8,7 @@ jed/cookie-node/index.js:cookie.js
 creationix/simple-mime/simple-mime.js:mime.js
 christkv/node-mongodb-native:mongodb
 cloudhead/eyes.js/lib/eyes.js:eyes.js
+tautologistics/node-htmlparser/lib/htmlparser.js:htmlparser.js
 #
 #edtsech/underscore.string/lib/underscore.string.js:underscore.string.js
 #
@@ -20,7 +21,7 @@ cloudhead/eyes.js/lib/eyes.js:eyes.js
 #
 lib=node_modules
 jslib=js
-mkdir -p "$lib" "$jslib"
+mkdir -p "$lib" #"$jslib"
 for dep in $deps; do
 	# skip comments
 	case "$dep" in

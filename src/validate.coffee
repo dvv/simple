@@ -167,7 +167,7 @@ validate = (instance, schema, options = {}, callback) ->
 							asyncs.push value: value, path: path, fetch: enumeration
 						# sync getter
 						else
-							enumeration = enumeration()
+							enumeration = enumeration.call @
 							addError 'enum' unless _.include enumeration, value
 					else
 						# simple array
