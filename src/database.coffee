@@ -196,7 +196,6 @@ class Database extends events.EventEmitter
 		# atomize the query
 		query = _.rql(query).toMongo()
 		query.search.$atomic = 1
-		# add history line
 		Next self,
 			(err, result, next) ->
 				#console.log 'BEFOREUPDATE', query, changes, schema
@@ -209,6 +208,7 @@ class Database extends events.EventEmitter
 				#console.log 'BEFOREUPDATEVALIDATED', arguments
 				# N.B. we inhibit empty changes
 				return next err if err or not _.size changes
+				# add history line
 				history =
 					who: user
 					when: Date.now()
@@ -217,7 +217,9 @@ class Database extends events.EventEmitter
 				# ensure changes are in multi-update format
 				# FIXME: should prohibit $set and id in changes at facet level!!!
 				changes = $set: changes #unless changes.$set or changes.$unset
-				changes.$push = '_meta.history': history
+				# TODO: document this
+				if schema?.saveChanges
+					changes.$push = '_meta.history': history
 				# do multi update
 				@collections[collection].update query.search, changes, {multi: true}, next
 			(err, result) ->

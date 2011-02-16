@@ -1,0 +1,7 @@
+#!/bin/sh
+exec >>log 2>&1
+
+#ab -n10000 -c200 "http://localhost:3000/course?name=re:un"
+#ab -n10000 -c200 "http://localhost:3000/Course?name=re:un"
+ab -n10000 -c200 "http://localhost:3000/course"
+ab -n10000 -c200 "http://localhost:3000/Course"
