@@ -15,6 +15,7 @@ class Database extends events.EventEmitter
 		name = conn.pathname.substring(1) if conn.pathname
 		# cache of collections
 		@collections = {}
+		@cache = {}
 		# model -- collection of registered entities
 		@model = {}
 		# primary key factory
@@ -22,6 +23,8 @@ class Database extends events.EventEmitter
 		# attribute to be used to mark document as deleted
 		# N.B. it allows for 3 additional methods: delete/undelete/purge
 		@attrInactive = options.attrInactive #'_deleted'
+		# support cache
+		@cached = options.cached isnt false
 		# DB connection
 		@db = new mongo.Db name or 'test', new mongo.Server(host or '127.0.0.1', port or 27017) #, native_parser: true
 		# register schema
@@ -89,23 +92,53 @@ class Database extends events.EventEmitter
 		# skip documents marked as deleted
 		if @attrInactive
 			query = query.ne(@attrInactive,true)
-		#console.log 'FIND?', query
-		query = query.toMongo()
-		#console.log 'FIND!', query
-		@collections[collection].find query.search, query.meta, (err, cursor) ->
-			return callback? err.message if err
-			cursor.toArray (err, docs) ->
-				#console.log 'FOUND', arguments
-				return callback? err.message if err
-				for doc, i in docs
-					# _id -> id
-					doc.id = doc._id
-					delete doc._id
-					# filter out protected fields
-					if schema
-						_.validate doc, schema, veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
-				docs = _.map docs, _.values if query.meta.values
+		# fill the cache
+		if @cached
+			self = @
+			if self.cache[collection]
+				#console.log 'FINDCACHED!', query
+				docs = _.query self.cache[collection], query
+				for doc in docs
+						# filter out protected fields
+						if schema
+							_.validate doc, schema, veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
 				callback? null, docs
+			else
+				@collections[collection].find {}, {}, (err, cursor) ->
+					return callback? err.message if err
+					cursor.toArray (err, docs) ->
+						#console.log 'FOUND', arguments
+						return callback? err.message if err
+						for doc, i in docs
+							# _id -> id
+							doc.id = doc._id
+							delete doc._id
+						self.cache[collection] = docs.slice()
+						#console.log 'FINDFIRST!', query
+						docs = _.query docs, query
+						for doc in docs
+								# filter out protected fields
+								if schema
+									_.validate doc, schema, veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
+						callback? null, docs
+		else
+			#console.log 'FIND?', query
+			query = query.toMongo()
+			#console.log 'FIND!', query
+			@collections[collection].find query.search, query.meta, (err, cursor) ->
+				return callback? err.message if err
+				cursor.toArray (err, docs) ->
+					#console.log 'FOUND', arguments
+					return callback? err.message if err
+					for doc, i in docs
+						# _id -> id
+						doc.id = doc._id
+						delete doc._id
+						# filter out protected fields
+						if schema
+							_.validate doc, schema, veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'get'
+					docs = _.map docs, _.values if query.meta.values
+					callback? null, docs
 		return
 
 	#
@@ -180,6 +213,8 @@ class Database extends events.EventEmitter
 					# filter out protected fields
 					if schema
 						_.validate result, schema, veto: true, removeAdditionalProps: not schema.additionalProperties, flavor: 'get'
+					# invalidate cache
+					@cache[collection] = null if @cached
 					callback? null, result
 					#self.emit 'add',
 					#	collection: collection
@@ -223,6 +258,8 @@ class Database extends events.EventEmitter
 				# do multi update
 				@collections[collection].update query.search, changes, {multi: true}, next
 			(err, result) ->
+				# invalidate cache
+				@cache[collection] = null if @cached
 				callback? err?.message or err
 				#self.emit 'update',
 				#	collection: collection
@@ -243,6 +280,8 @@ class Database extends events.EventEmitter
 		# naive fuser
 		return callback? 'Refuse to remove all documents w/o conditions' unless _.size query.search
 		@collections[collection].remove query.search, (err) ->
+			# invalidate cache
+			@cache[collection] = null if @cached
 			callback? err?.message
 			#self.emit 'remove',
 			#	collection: collection

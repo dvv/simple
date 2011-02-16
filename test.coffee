@@ -240,6 +240,7 @@ All {},
 				_.each result, (rec) ->
 					model.Course.add ctx, rec, (err, result) ->
 						console.log 'COURSEFAILED', rec.name if err
+		###
 		fetchGeo (err, result) ->
 			global.geo = result.slice()
 			if not process.env._WID_
@@ -247,6 +248,7 @@ All {},
 					_.each result, (rec) ->
 						model.Geo.add ctx, rec, (err, result) ->
 							console.log 'GEOFAILED', rec.name if err
+		###
 
 		#
 		# app should provide for .getContext(uid, next) -- the method to retrieve

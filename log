@@ -1,165 +1,8 @@
-This is ApacheBench, Version 2.3 <$Revision: 655654 $>
-Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
-Licensed to The Apache Software Foundation, http://www.apache.org/
-
-Benchmarking localhost (be patient)
-Completed 1000 requests
-Completed 2000 requests
-Completed 3000 requests
-Completed 4000 requests
-Completed 5000 requests
-Completed 6000 requests
-Completed 7000 requests
-Completed 8000 requests
-Completed 9000 requests
-Completed 10000 requests
-Finished 10000 requests
 
 
-Server Software:        
-Server Hostname:        localhost
-Server Port:            3000
-
-Document Path:          /course?name=re:un
-Document Length:        919 bytes
-
-Concurrency Level:      200
-Time taken for tests:   17.867 seconds
-Complete requests:      10000
-Failed requests:        0
-Write errors:           0
-Total transferred:      9890000 bytes
-HTML transferred:       9190000 bytes
-Requests per second:    559.71 [#/sec] (mean)
-Time per request:       357.331 [ms] (mean)
-Time per request:       1.787 [ms] (mean, across all concurrent requests)
-Transfer rate:          540.57 [Kbytes/sec] received
-
-Connection Times (ms)
-              min  mean[+/-sd] median   max
-Connect:        0   98 594.0      0    9001
-Processing:     3  226 125.6    206    1475
-Waiting:        3  224 124.9    205    1475
-Total:          6  324 607.3    208    9192
-
-Percentage of the requests served within a certain time (ms)
-  50%    208
-  66%    255
-  75%    299
-  80%    328
-  90%    412
-  95%    543
-  98%   3201
-  99%   3290
- 100%   9192 (longest request)
-This is ApacheBench, Version 2.3 <$Revision: 655654 $>
-Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
-Licensed to The Apache Software Foundation, http://www.apache.org/
-
-Benchmarking localhost (be patient)
-Completed 1000 requests
-Completed 2000 requests
-Completed 3000 requests
-Completed 4000 requests
-Completed 5000 requests
-Completed 6000 requests
-Completed 7000 requests
-Completed 8000 requests
-Completed 9000 requests
-Completed 10000 requests
-Finished 10000 requests
+-----------------------
 
 
-Server Software:        
-Server Hostname:        localhost
-Server Port:            3000
-
-Document Path:          /Course?name=re:un
-Document Length:        1099 bytes
-
-Concurrency Level:      200
-Time taken for tests:   52.432 seconds
-Complete requests:      10000
-Failed requests:        0
-Write errors:           0
-Total transferred:      11880000 bytes
-HTML transferred:       10990000 bytes
-Requests per second:    190.72 [#/sec] (mean)
-Time per request:       1048.635 [ms] (mean)
-Time per request:       5.243 [ms] (mean, across all concurrent requests)
-Transfer rate:          221.27 [Kbytes/sec] received
-
-Connection Times (ms)
-              min  mean[+/-sd] median   max
-Connect:        0    1   5.7      0      64
-Processing:   430 1043 277.8    956    2250
-Waiting:      426 1043 277.8    956    2248
-Total:        490 1044 277.7    957    2250
-
-Percentage of the requests served within a certain time (ms)
-  50%    957
-  66%   1015
-  75%   1070
-  80%   1129
-  90%   1368
-  95%   1753
-  98%   1989
-  99%   2093
- 100%   2250 (longest request)
-This is ApacheBench, Version 2.3 <$Revision: 655654 $>
-Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
-Licensed to The Apache Software Foundation, http://www.apache.org/
-
-Benchmarking localhost (be patient)
-Completed 1000 requests
-Completed 2000 requests
-Completed 3000 requests
-Completed 4000 requests
-Completed 5000 requests
-Completed 6000 requests
-Completed 7000 requests
-Completed 8000 requests
-Completed 9000 requests
-Completed 10000 requests
-Finished 10000 requests
-
-
-Server Software:        
-Server Hostname:        localhost
-Server Port:            3000
-
-Document Path:          /course
-Document Length:        6050 bytes
-
-Concurrency Level:      200
-Time taken for tests:   13.492 seconds
-Complete requests:      10000
-Failed requests:        0
-Write errors:           0
-Total transferred:      61200000 bytes
-HTML transferred:       60500000 bytes
-Requests per second:    741.20 [#/sec] (mean)
-Time per request:       269.832 [ms] (mean)
-Time per request:       1.349 [ms] (mean, across all concurrent requests)
-Transfer rate:          4429.84 [Kbytes/sec] received
-
-Connection Times (ms)
-              min  mean[+/-sd] median   max
-Connect:        0   74 464.4      0    3001
-Processing:     6  181  94.4    176    1552
-Waiting:        6  171  89.3    169    1552
-Total:          6  255 473.8    179    3334
-
-Percentage of the requests served within a certain time (ms)
-  50%    179
-  66%    222
-  75%    251
-  80%    271
-  90%    310
-  95%    344
-  98%   3098
-  99%   3214
- 100%   3334 (longest request)
 This is ApacheBench, Version 2.3 <$Revision: 655654 $>
 Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
 Licensed to The Apache Software Foundation, http://www.apache.org/
@@ -183,34 +26,34 @@ Server Hostname:        localhost
 Server Port:            3000
 
 Document Path:          /Course
-Document Length:        7080 bytes
+Document Length:        7081 bytes
 
-Concurrency Level:      200
-Time taken for tests:   205.482 seconds
+Concurrency Level:      100
+Time taken for tests:   31.912 seconds
 Complete requests:      10000
 Failed requests:        0
 Write errors:           0
-Total transferred:      71690000 bytes
-HTML transferred:       70800000 bytes
-Requests per second:    48.67 [#/sec] (mean)
-Time per request:       4109.644 [ms] (mean)
-Time per request:       20.548 [ms] (mean, across all concurrent requests)
-Transfer rate:          340.71 [Kbytes/sec] received
+Total transferred:      71700000 bytes
+HTML transferred:       70810000 bytes
+Requests per second:    313.36 [#/sec] (mean)
+Time per request:       319.125 [ms] (mean)
+Time per request:       3.191 [ms] (mean, across all concurrent requests)
+Transfer rate:          2194.11 [Kbytes/sec] received
 
 Connection Times (ms)
               min  mean[+/-sd] median   max
-Connect:        0    0   2.9      0      31
-Processing:  1762 4097 816.7   3686    6999
-Waiting:     1758 4097 816.6   3686    6997
-Total:       1790 4098 816.9   3686    7029
+Connect:        0    0   1.6      0      25
+Processing:     6  317 169.8    316     823
+Waiting:        5  304 162.5    307     700
+Total:          6  317 169.7    316     823
 
 Percentage of the requests served within a certain time (ms)
-  50%   3686
-  66%   3809
-  75%   4340
-  80%   4828
-  90%   5629
-  95%   5857
-  98%   5959
-  99%   6316
- 100%   7029 (longest request)
+  50%    316
+  66%    396
+  75%    452
+  80%    483
+  90%    550
+  95%    590
+  98%    621
+  99%    645
+ 100%    823 (longest request)
