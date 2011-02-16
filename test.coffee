@@ -205,6 +205,12 @@ fetchGeo = (next) ->
 				geo = _.toArray geo
 				next null, geo
 
+s = ''
+for i in [0..599]
+	s += '1234567890'
+TESTSTR6000 = s
+TESTSTR12000 = s+s
+
 #
 # setup and run the server
 #
@@ -240,7 +246,6 @@ All {},
 				_.each result, (rec) ->
 					model.Course.add ctx, rec, (err, result) ->
 						console.log 'COURSEFAILED', rec.name if err
-		###
 		fetchGeo (err, result) ->
 			global.geo = result.slice()
 			if not process.env._WID_
@@ -248,7 +253,6 @@ All {},
 					_.each result, (rec) ->
 						model.Geo.add ctx, rec, (err, result) ->
 							console.log 'GEOFAILED', rec.name if err
-		###
 
 		#
 		# app should provide for .getContext(uid, next) -- the method to retrieve
@@ -294,6 +298,11 @@ All {},
 				#console.log req.location.search
 				query = _.rql decodeURI(req.location.search or '')
 				res.send _.query(geo, query)
+
+			simple.handlers.mount 'GET', '/l6000', (req, res, next) ->
+				res.send TESTSTR6000
+			simple.handlers.mount 'GET', '/l12000', (req, res, next) ->
+				res.send TESTSTR12000
 
 			#simple.handlers.logRequest()
 

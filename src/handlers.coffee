@@ -278,7 +278,8 @@ module.exports.jsonrpc = (options = {}) ->
 				else
 					response.result = result
 				# respond
-				res.send response, 'content-type': 'application/json-rpc; charset=utf-8'
+				#res.send response, 'content-type': 'application/json-rpc; charset=utf-8'
+				res.send response
 
 #
 # bind a handler to a location, and optionally HTTP verb

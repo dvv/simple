@@ -7,6 +7,7 @@ cloudhead/node-static/lib:static
 jed/cookie-node/index.js:cookie.js
 creationix/simple-mime/simple-mime.js:mime.js
 christkv/node-mongodb-native:mongodb
+bnoguchi/redis-node:redis
 cloudhead/eyes.js/lib/eyes.js:eyes.js
 tautologistics/node-htmlparser/lib/htmlparser.js:htmlparser.js
 #

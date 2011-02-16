@@ -1,10 +1,11 @@
 #!/bin/sh
 exec >>log 2>&1
-echo "\n\n-----------------------\n\n"
 
-#ab -n10000 -c200 "http://localhost:3000/course?name=re:un"
-#ab -n10000 -c200 "http://localhost:3000/Course?name=re:un"
-#ab -n10000 -c200 "http://localhost:3000/course"
-ab -n10000 -c100 "http://localhost:3000/Course"
-#ab -n10000 -c100 "http://localhost:3000/geo"
-#ab -n10000 -c100 "http://localhost:3000/Geo"
+URL=Course
+URL=Geo
+
+ab -n10000 -c100 http://localhost:3000/$URL
+ab -n10000 -c100 http://localhost:3000/$URL
+ab -n10000 -c100 http://localhost:3000/$URL
+ab -n10000 -c100 http://localhost:3000/$URL
+ab -n10000 -c100 http://localhost:3000/$URL
