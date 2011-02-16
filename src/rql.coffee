@@ -481,6 +481,10 @@ operators =
 		regex = new RegExp regex, 'i' unless _.isRegExp regex
 		_.select list, (x) -> regex.test _.get x, prop
 
+	nmatch: (list, prop, regex) ->
+		regex = new RegExp regex, 'i' unless _.isRegExp regex
+		_.select list, (x) -> not regex.test _.get x, prop
+
 	in: (list, prop, values) ->
 		values = _.ensureArray values
 		_.select list, (x) -> _.include values, _.get x, prop

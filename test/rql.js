@@ -146,7 +146,7 @@ var queryPairs = {
     ]
 };
 
-var data = [{
+var data = window.data = [{
 		"with/slash": "slashed",
 		"nested": {
 			"property": "value"
@@ -242,7 +242,7 @@ var data = [{
 	module("Array");
 
 	test("filtering #1", function(){
-		equals(_.query(data, "price<10").length, 1);
+		/*equals(_.query(data, "price<10").length, 1);
 		equals(_.query(data, "price<11").length, 2);
 		equals(_.query(data, "nested/property=value").length, 1);
 		equals(_.query(data, "with%2Fslash=slashed").length, 1);
@@ -257,14 +257,14 @@ var data = [{
 		//equals(_.query(data, "excludes(tags,ne(fun))").length, 1);
 		//equals(_.query(data, "excludes(tags,ne(even))").length, 0);
 
-		deepEqual(_.query(data, "match(price,10)"), [data[0]]);
+		deepEqual(_.query(data, "match(price,10)"), [data[0]]);*/
 		deepEqual(_.query(data, "price=re:10"), [data[0]]);
 		deepEqual(_.query(data, "price!=re:10"), [data[1]]);
 		deepEqual(_.query(data, "match(name,f.*)"), [data[1]]);
 		deepEqual(_.query(data, "match(name,glob:f*)"), [data[1]]);
 	});
 
-	test("filtering #2", function(){
+	/*test("filtering #2", function(){
 		var data = [{
 			"path.1":[1,2,3]
 		},{
@@ -301,6 +301,6 @@ var data = [{
 		deepEqual(_.query(data, 'nin(foo/bar,baz2)'), [data[0], data[2]], 'non-occurance in non-array');
 		deepEqual(_.query(data, 'between(foo/bar,baz1,baz3)'), [data[0], data[1]], 'between strings');
 		deepEqual(_.query(data, 'between(b,2,4)'), [data[0]], 'between numbers');
-	});
+	});*/
 
 });
