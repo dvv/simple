@@ -1,3 +1,5 @@
+'use strict'
+
 ###
 
      Vladimir Dronnikov 2011 dronnikov@gmail.com

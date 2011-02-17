@@ -57,6 +57,6 @@ for dep in $deps; do
 done
 
 #
-# compile commonjs stuff
+# compile coffee stuff
 #
 coffee -bc -o lib src/*.coffee
