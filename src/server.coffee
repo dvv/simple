@@ -45,8 +45,9 @@ module.exports = (handler, options = {}) ->
 	#
 	node = new process.EventEmitter()
 
-	# setup server
-	# SSL?
+	#
+	# setup HTTP(S) server
+	#
 	if options.sslKey
 		fs = require 'fs'
 		credentials =
@@ -57,7 +58,16 @@ module.exports = (handler, options = {}) ->
 	else
 		server = require('http').createServer handler
 
+	#
+	# pubsub, if any
+	#
+	if options.pubsub
+		subscribe = require('redis').createClient()
+		_.each options.pubsub, (handler, channel) -> subscribe.subscribeTo channel, handler.bind(node)
+
+	#
 	# worker branch
+	#
 	if process.env._WID_
 
 		Object.defineProperty node, 'id', value: process.env._WID_
@@ -75,7 +85,49 @@ module.exports = (handler, options = {}) ->
 			console.log "WORKER #{node.id} started as PID #{process.pid}"
 		comm.resume()
 
+		#
+		# add websocket handler
+		#
+		if options.websocket
+			websocket = require('io').listen server,
+				#resource: 'ws'
+				flashPolicyServer: false
+				transports: ['websocket', 'flashsocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
+				#transportOptions:
+				#	websocket:
+				#		foo: 'bar'
+			###
+			websocket.clientConnect = options.websocket.onConnect
+			websocket.clientDisconnect = options.websocket.onDisconnect
+			websocket.clientMessage = options.websocket.onMessage
+			###
+			if options.pubsub
+				publish = require('redis').createClient()
+				###
+				websocket.clientConnect = (client) ->
+					publish 'client', JSON.stringify who: client, when: Date.now(), what: 'enter'
+				websocket.clientDisconnect = (client) ->
+					publish 'client', JSON.stringify who: client, when: Date.now(), what: 'leave'
+				websocket.clientMessage = (message, client) ->
+					publish 'client', JSON.stringify who: client, when: Date.now(), what: 'msg', data: message
+				###
+				subscribe.subscribeTo 'client', (channel, message) ->
+					websocket.broadcast message
+
+				websocket.on 'connection', (client) ->
+					client.broadcast
+						announcement: client.sessionId + ' connected'
+					client.on 'message', (message) ->
+						msg =
+							message: [client.sessionId, message]
+						client.broadcast msg
+					client.on 'disconnect', () ->
+						client.broadcast
+							announcement: client.sessionId + ' disconnected'
+
+	#
 	# master branch
+	#
 	else
 
 		Object.defineProperty node, 'id', value: 'master'
@@ -85,7 +137,7 @@ module.exports = (handler, options = {}) ->
 		netBinding = process.binding 'net'
 		socket = netBinding.socket 'tcp4'
 		netBinding.bind socket, options.port
-		netBinding.listen socket, options.connections or 128
+		netBinding.listen socket, options.connections or 1024
 
 		# attach the server if no workers needed
 		server.listenFD socket, 'tcp4' unless options.workers
@@ -153,6 +205,9 @@ module.exports = (handler, options = {}) ->
 			process.stdin.on 'close', process.exit
 			repl = require('repl').start 'node>'
 
+	#
+	# uncaught exceptions cause workers respawn
+	#
 	process.on 'uncaughtException', (err) ->
 		# http://www.debuggable.com/posts/node-js-dealing-with-uncaught-exceptions:4c933d54-1428-443c-928d-4e1ecbdd56cb
 		console.log 'Caught exception: ' + err.stack

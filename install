@@ -10,6 +10,7 @@ christkv/node-mongodb-native:mongodb
 bnoguchi/redis-node:redis
 cloudhead/eyes.js/lib/eyes.js:eyes.js
 tautologistics/node-htmlparser/lib/htmlparser.js:htmlparser.js
+LearnBoost/Socket.IO-node:io
 #
 #edtsech/underscore.string/lib/underscore.string.js:underscore.string.js
 #

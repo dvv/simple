@@ -14,7 +14,9 @@ function testSchema(data){
 
 // equality of queries `a` and `b`
 function deq(a, b, msg){
+	//if (a && a.error && b && b.error)
 	deepEqual(a.error, b.error, msg);
+	//if (a && a.name && b && b.name)
 	deepEqual(a.name, b.name, msg);
 	if (_.isArray(a.args)) {
 		for (var i = 0, l = a.args.length; i < l; ++i) {
@@ -22,10 +24,12 @@ function deq(a, b, msg){
 				deq(a.args[i], b.args[i], msg);
 			} else {
 				deepEqual(a.args[i], b.args[i], msg);
+				//deq(a.args[i], b.args[i], msg);
 			}
 		}
 	} else {
 		deepEqual(a.args, b.args, msg);
+		//deq(a.args, b.args, msg);
 	}
 }
 
@@ -216,6 +220,12 @@ var data = window.data = [{
     deq(parsed, {name: 'and', args: [{name: 'in', args: ['id', ['a', 'b', 'c']]}]});
     parsed = _.rql('eq(id,$1)', ['a']);
     deq(parsed, {name: 'and', args: [{name: 'eq', args: ['id', 'a']}]});
+	});
+
+	test("array of IDs", function(){
+    var parsed = _.rql(['a', ['b','c'], 'd']);
+    //console.log('PIDS', parsed);
+    deq(parsed, {name: 'and', args: [{name: 'in', args: ['id', ['a', ['b','c'], 'd']]}]});
 	});
 
 	test("stringification", function(){

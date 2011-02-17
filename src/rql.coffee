@@ -559,11 +559,11 @@ stringify = (str) -> '"' + String(str).replace(/"/g, '\\"') + '"'
 # N.B. you should clone the array if you sort, since sorting affects the original
 query = (list, query, options = {}) ->
 
-	console.log 'QUERY?', query
+	#console.log 'QUERY?', query
 	query = parse query, options.parameters
 	# parse error -- don't hesitate, return empty array
 	return [] if query.error
-	console.log 'QUERY!', query
+	#console.log 'QUERY!', query
 
 	queryToJS = (value) ->
 		if _.isObject(value) and not _.isRegExp(value) # N.B. V8 treats regexp as function...
