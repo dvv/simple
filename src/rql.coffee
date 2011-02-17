@@ -510,6 +510,11 @@ operators.out = operators.nin
 operators.excludes = operators.ncontains
 operators.distinct = _.uniq
 
+#
+# stringification helper
+#
+stringify = (str) -> '"' + String(str).replace(/"/g, '\\"') + '"'
+
 # N.B. you should clone the array if you sort, since sorting affects the original
 query = (list, query, options = {}) ->
 
@@ -535,10 +540,10 @@ query = (list, query, options = {}) ->
 					else if _.isArray path
 						escaped = []
 						for p in path
-							escaped.push JSON.stringify p
+							escaped.push stringify p
 							item += '&&item[' + escaped.join('][') + ']'
 					else
-						item += '&&item[' + JSON.stringify(path) + ']'
+						item += '&&item[' + stringify(path) + ']'
 					testValue = queryToJS prm
 					# N.B. regexp equality means match, inequality -- no match
 					if _.isRegExp testValue
@@ -558,7 +563,7 @@ query = (list, query, options = {}) ->
 					"function(list){return _.select(list,function(item){return false;});}"
 		else
 			# escape strings
-			if _.isString value then JSON.stringify(value) else value
+			if _.isString value then stringify(value) else value
 
 	#expr = ';(function(list){return ' + queryToJS(query) + '})(list);'
 	expr = queryToJS(query).slice(15, -1) # strip the outmost function(list) ...
