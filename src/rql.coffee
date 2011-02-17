@@ -313,8 +313,8 @@ converters =
 		if isoDate
 			date = new Date(Date.UTC(+isoDate[1], +isoDate[2] - 1, +isoDate[3], +isoDate[4], +isoDate[5], +isoDate[6]))
 		else
-			date = new Date x
-		throw new URIError 'Invalid date ' + x unless _.isDate date #if _.isNaN date.getTime()
+			date = _.parseDate x
+		throw new URIError 'Invalid date ' + x unless _.isDate date
 		date
 	boolean: (x) ->
 		#x is 'true'
@@ -520,7 +520,7 @@ query = (list, query, options = {}) ->
 	#console.log 'QUERY!', query
 
 	queryToJS = (value) ->
-		if _.isObject value
+		if _.isObject(value) and not _.isRegExp(value) # N.B. V8 treats regexp as function...
 			# FIXME: object and array simultaneously?!
 			if _.isArray value
 				'[' + _.map(value, queryToJS) + ']'
@@ -551,7 +551,7 @@ query = (list, query, options = {}) ->
 					"function(list){return _.select(list,function(item){return #{condition};});}"
 				else if operators.hasOwnProperty value.name
 					#"operators.#{value.name}(" + ['list'].concat(_.map(value.args, queryToJS)).join(',') + ')'
-					"function(list){return operators.#{value.name}(" + ['list'].concat(_.map(value.args, queryToJS)).join(',') + ');}'
+					"function(list){return operators['#{value.name}'](" + ['list'].concat(_.map(value.args, queryToJS)).join(',') + ');}'
 				else
 					# unknown function -- don't hesitate, return empty
 					#"function(){return []}"
@@ -561,7 +561,7 @@ query = (list, query, options = {}) ->
 			if _.isString value then JSON.stringify(value) else value
 
 	#expr = ';(function(list){return ' + queryToJS(query) + '})(list);'
-	expr = queryToJS(query).slice(15, -1)
+	expr = queryToJS(query).slice(15, -1) # strip the outmost function(list) ...
 	#console.log expr #, list
 	if list then (new Function 'list, operators', expr) list, operators else expr
 

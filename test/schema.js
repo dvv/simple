@@ -29,7 +29,7 @@ $(document).ready(function(){
 				type: 'array',
 				items: {
 					type: 'string',
-					enum: ['eniki', 'beniki', 'eli', 'vareniki']
+					'enum': ['eniki', 'beniki', 'eli', 'vareniki']
 				}
 			},
 			defaulty: {
@@ -44,8 +44,8 @@ $(document).ready(function(){
 		obj = {id: 'bac', foo: '4', bar: 'vareniki', spam: true};
 		equals(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add', coerce: true}),
 			null, 'coerced and added ok');
-		//console.log(obj.defaulty.toISOString())
-		deepEqual(obj, {id: 'bac', foo: 4, bar: ['vareniki'], defaulty: new Date('2011-02-14')}, 'coerced for "add" ok');
+		//console.log(obj.defaulty, _.parseDate('2011-02-14'));
+		deepEqual(obj, {id: 'bac', foo: 4, bar: ['vareniki'], defaulty: _.parseDate('2011-02-14')}, 'coerced for "add" ok');
 		obj = {id: 'bac1', foo: 'a', bar: 'pelmeshki'};
 		deepEqual(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add', coerce: true}),
 			[{property: 'id', message: 'pattern'}, {'property': 'foo', 'message': 'type'}, {'property': 'bar[0]', 'message': 'enum'}], 'validate for "add"');
@@ -100,7 +100,7 @@ $(document).ready(function(){
 				type: 'array',
 				items: {
 					type: 'string',
-					enum: ['eniki', 'beniki', 'eli', 'vareniki']
+					'enum': ['eniki', 'beniki', 'eli', 'vareniki']
 				}
 			},
 			defaulty: {
@@ -115,7 +115,7 @@ $(document).ready(function(){
 		obj = {id: 'bac', foo: '4', bar: 'vareniki', spam: true};
 		equals(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add', coerce: true}),
 			null, 'coerced and added ok');
-		deepEqual(obj, {id: 'bac', foo: 4, bar: ['vareniki'], defaulty: new Date('2011-02-14'), spam: true}, 'coerced for "add" ok');
+		deepEqual(obj, {id: 'bac', foo: 4, bar: ['vareniki'], defaulty: _.parseDate('2011-02-14'), spam: true}, 'coerced for "add" ok');
 		obj = {id: 'bac1', foo: 'a', bar: 'pelmeshki'};
 		deepEqual(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add', coerce: true}),
 			[{property: 'id', message: 'pattern'}, {'property': 'foo', 'message': 'type'}, {'property': 'bar[0]', 'message': 'enum'}], 'validate for "add"');
@@ -170,7 +170,7 @@ $(document).ready(function(){
 				type: 'array',
 				items: {
 					type: 'string',
-					enum: ['eniki', 'beniki', 'eli', 'vareniki']
+					'enum': ['eniki', 'beniki', 'eli', 'vareniki']
 				}
 			},
 			defaulty: {
@@ -188,7 +188,7 @@ $(document).ready(function(){
 		obj = {id: 'bac', foo: '4', bar: 'vareniki', spam: true};
 		equals(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add', coerce: true}),
 			null, 'coerced and added ok');
-		deepEqual(obj, {id: 'bac', foo: 4, bar: ['vareniki'], defaulty: new Date('2011-12-31'), spam: 1}, 'coerced for "add" ok');
+		deepEqual(obj, {id: 'bac', foo: 4, bar: ['vareniki'], defaulty: _.parseDate('2011-12-31'), spam: 1}, 'coerced for "add" ok');
 		obj = {id: 'bac1', foo: 'a', bar: 'pelmeshki'};
 		deepEqual(_.validate(obj, schema, {veto: true, removeAdditionalProps: !schema.additionalProperties, flavor: 'add', coerce: true}),
 			[{property: 'id', message: 'pattern'}, {'property': 'foo', 'message': 'type'}, {'property': 'bar[0]', 'message': 'enum'}], 'validate for "add"');

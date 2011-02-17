@@ -43,8 +43,8 @@ coerce = (value, type) ->
 	else if type is 'array'
 		value = _.ensureArray value
 	else if type is 'date'
-		date = new Date value
-		value = date unless _.isNaN date.getTime()
+		date = _.parseDate value
+		value = date if _.isDate date
 	value
 
 #
@@ -102,10 +102,10 @@ validate = (instance, schema, options = {}, callback) ->
 			if type
 				# TODO: coffee-ize, underscore-ize
 				if typeof type is 'string' and type isnt 'any' and
-						`(type == 'null' ? value !== null : typeof value != type) &&
-						!(value instanceof Array && type == 'array') &&
-						!(value instanceof Date && type == 'date') &&
-						!(type == 'integer' && value%1===0)`
+						`(type == 'null' ? value !== null : typeof value !== type) &&
+						!(type === 'array' && _.isArray(value)) &&
+						!(type === 'date' && _.isDate(value)) &&
+						!(type === 'integer' && value%1===0)`
 					return [property: path, message: 'type']
 				if _.isArray type
 					# a union type

@@ -125,3 +125,15 @@ _.mixin
 				obj
 			else
 				obj[path]
+
+_.mixin
+	#
+	# until every engine supports ECMA5, safe coercing to Date is evil
+	#
+	parseDate: (value) ->
+		date = new Date value
+		return date if _.isDate date
+		parts = String(value).match /(\d+)/g
+		new Date(parts[0], ((parts[1] or 1) - 1), (parts[2] or 1))
+	isDate: (obj) ->
+		not not (obj?.getTimezoneOffset and obj.setUTCFullYear and not _.isNaN(obj.getTime()))

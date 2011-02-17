@@ -18,6 +18,7 @@ $(document).ready(function(){
 		deepEqual(_.toHash(obj, ['c','d']), {foo:{a:1,b:2,c:{d:'foo'}},bar:{a:2,b:3,c:{d:'bar'}},baz:{a:3,b:4,c:{d:'baz'}}}, 'deep toHash');
 	});
 
+	if (Object.freeze) {
 	test('proxy', function(){
 		var obj = {action: function(x){return 'acted';}, deep: {action: function(x){return 'acted from deep';}}, private: function(){return 'hidden';}};
 		deepEqual(_.proxy(obj, ['action']), {action: obj.action}, 'simple');
@@ -48,5 +49,6 @@ $(document).ready(function(){
 		try { obj.a.b = 1; } catch (x){}
 		deepEqual(obj, {a:{b:{c:{d:[1,2,3]}}}}, 'deep');
 	});
+	}
 
 });
