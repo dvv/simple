@@ -51,14 +51,16 @@ parseLocation = (url, next) ->
 	req =
 		host: req.hostname
 		port: req.port or 80
-		path: req.pathname
-		headers: {}
+		path: url
+		headers:
+			Accept: '*/*'
+			'User-Agent': 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US) AppleWebKit/534.6 (KHTML, like Gecko) Chrome/7.0.503.0 Safari/534.6'
 	if process.env.http_proxy
 		proxy = parseUrl process.env.http_proxy
 		req.headers.host = req.host
 		req.port = proxy.port or 80
 		req.host = proxy.hostname
-		req.path = url
+		#req.path = url
 	handler = new htmlparser.DefaultHandler (err, dom) ->
 		next err, dom
 	,
