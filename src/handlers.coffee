@@ -337,6 +337,22 @@ module.exports.mount = (method, path, handler) ->
 				next()
 
 #
+# serve chrome page
+#
+module.exports.chrome = (options = {}) ->
+
+	handler = (req, res, next) ->
+
+		if req.method is 'GET' and req.url is '/'
+			console.log 'STATIC?', req.url
+			if req.context?.user?.type
+				res.send '<HTML>'+JSON.stringify(req.context.user)+'</HTML>'
+			else
+				res.send '<HTML1></HTML1>'
+		else
+			next()
+
+#
 # serve static content
 #
 module.exports.static_ = (options = {}) ->
@@ -348,6 +364,10 @@ module.exports.static_ = (options = {}) ->
 		# serve files
 		# no static file? -> none of our business
 		if req.method is 'GET'
+			#console.log 'STATIC?', req.url
+			#if options.honorType and req.context?.user?.type
+			#	req.url = '/' + req.context.user.type + req.url
+			#console.log 'STATIC!', req.url
 			static_.serve req, res, (err, data) ->
 				next() if err?.status is 404
 		else
