@@ -51,22 +51,21 @@ parseLocation = (url, next) ->
 	req =
 		host: req.hostname
 		port: req.port or 80
-		path: req.pathname #url #TODO: querystring
+		path: req.pathname + (if req.search then req.search else '')
 		headers:
 			accept: '*/*'
-	if process.env.http_proxy
+			'user-agent': 'wget 1.14'
+	if process.env.http_proxy # FIXME: use req.protocol to determine ${protocol}_proxy ?
 		proxy = parseUrl process.env.http_proxy
 		req.headers.host = req.host
 		req.port = proxy.port or 80
 		req.host = proxy.hostname
 		req.path = url
 	handler = new htmlparser.DefaultHandler (err, dom) ->
-		console.log 'ARGS', arguments
 		next err, dom
 	,
 		ignoreWhitespace: true
 		verbose: false
-	console.log req
 	parser = new htmlparser.Parser handler
 	wget = http.get req, (res) ->
 		if res.statusCode > 299

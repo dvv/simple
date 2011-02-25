@@ -61,3 +61,7 @@ done
 # compile coffee stuff
 #
 coffee -bc -o lib src/*.coffee
+
+#
+# compose rql
+#
