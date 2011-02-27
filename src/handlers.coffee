@@ -7,7 +7,7 @@
      Redistribution and use in source and binary forms, with or without
      modification, are permitted provided that the following conditions are
      met:
-     
+
      * Redistributions of source code must retain the above copyright
        notice, this list of conditions and the following disclaimer.
      * Redistributions in binary form must reproduce the above
@@ -17,7 +17,7 @@
      * Neither the name of the  nor the names of its
        contributors may be used to endorse or promote products derived from
        this software without specific prior written permission.
-     
+
      THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
      "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
      LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -130,14 +130,14 @@ module.exports.logResponse = (options) ->
 #
 module.exports.authCookie = (options = {}) ->
 
-	require('cookie').secret = options.secret
+	Cookie = require './cookie'
 	cookie = options.cookie or 'uid'
 	getContext = options.getContext
 
 	if getContext
 
-		# define helper to set/clear secured cookie
-		require('http').ServerResponse::setSession = (session) ->
+		# helper to set/clear secured cookie
+		require('http').ServerResponse::setSession0000 = (session) ->
 			cookieOptions = path: '/', httpOnly: true
 			if _.isObject session
 				# set the cookie
@@ -149,12 +149,26 @@ module.exports.authCookie = (options = {}) ->
 				@clearCookie cookie, cookieOptions
 				session
 
+		# helper to set/clear secured cookie
+		require('http').ServerResponse::setSession = (session) ->
+			cookieOptions = path: '/', httpOnly: true
+			if _.isObject session
+				# set the cookie
+				cookieOptions.expires = session.expires if session.expires
+				@req.cookie.set cookie, session.uid, cookieOptions
+				undefined
+			else
+				# clear the cookie
+				@req.cookie.clear cookie, cookieOptions
+				session
+
 		#
 		# handler
 		#
 		(req, res, next) ->
+			req.cookie = new Cookie req, res, options.secret
 			# get the user ID
-			uid = req.getSecureCookie cookie
+			uid = req.cookie.get cookie
 			#console.log "UID #{uid}"
 			# attach context of that user to the request
 			getContext uid, (err, context) ->

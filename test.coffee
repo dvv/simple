@@ -29,9 +29,10 @@ config =
 			dir: 'test'
 			ttl: 3600
 		stackTrace: true
-		pubsub:
-			bcast: (channel, message) -> console.error 'BCAST', @id, channel, message
-		websocket: true
+		#pubsub:
+		#	bcast: (channel, message) -> console.error 'BCAST', @id, channel, message
+		#websocket: true
+		ipc: '.ipc'
 
 	security:
 
@@ -179,9 +180,9 @@ All {},
 			simple.handlers.jsonBody
 				maxLength: 0 # set to >0 to limit the number of bytes
 
-			#simple.handlers.mount '/foo1',
-			#	get: (req, res, next) -> res.send 'GETFOO1'
-			#	post: (req, res, next) -> res.send 'POSTFOO1'
+			simple.handlers.mount '/foo1',
+				get: (req, res, next) -> res.send 'GETFOO1'
+				post: (req, res, next) -> res.send 'POSTFOO1'
 
 			simple.handlers.authCookie
 				cookie: 'uid'

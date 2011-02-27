@@ -1,0 +1,70 @@
+#
+# based on kriszyp's multi-node
+#
+
+# takes raw binary stream and returns a framed stream for sending and
+# receving JSON data
+
+module.exports = (stream) ->
+	emitter = new process.EventEmitter()
+	buffered = []
+	start = 0
+	stream.on 'data', (data) ->
+		start = 0
+		l = data.length
+		for b, i in data
+			if b is 0
+				start = i + 1
+			if b is 255
+				buffer = data.slice start, i
+				if buffered.length
+					buffered.push buffer
+					totalSize = buffered.reduce (r, part) ->
+						r + part.length
+					, 0
+					buffer = new Buffer totalSize
+					buffered.reduce (r, part) ->
+						part.copy buffer, r, 0, part.length
+						r + part.length
+					, 0
+				emitter.emit 'message', JSON.parse(buffer.toString('utf8', 0, buffer.length))
+				start = i + 1
+				buffered = []
+		if start < l
+			buffered.push data.slice(start, data.length)
+	emitter.send = (message) ->
+		buffer = new Buffer JSON.stringify(message), 'utf8'
+		framedBuffer = new Buffer buffer.length + 2
+		framedBuffer[0] = 0
+		buffer.copy framedBuffer, 1, 0, buffer.length
+		framedBuffer[framedBuffer.length - 1] = 255
+		stream.write framedBuffer
+	emitter
+
+###
+module.exports = (stream) ->
+	emitter = new process.EventEmitter()
+	buffer = bufferIndex = undefined
+	remainingFrameSize = 0
+	stream.on 'data', (data) ->
+		while data.length
+			if buffer and (buffer.length - bufferIndex > data.length)
+				data.copy buffer, bufferIndex, 0, data.length
+				bufferIndex += data.length
+			else
+				if buffer
+					data.copy buffer, bufferIndex, 0, buffer.length - bufferIndex
+					emitter.emit 'message', buffer.toString('utf8', 0, buffer.length)
+					data = data.slice buffer.length - bufferIndex, data.length
+				if data.length
+					buffer = new Buffer((data[index] << 24) + (data[index + 1] << 16)  + (data[index + 2] << 8) + (data[index + 3]))
+					bufferIndex = 0
+					data = data.slice 4, data.length
+				else
+					buffer = null
+	emitter.send = (message) ->
+		buffer = new Buffer message, 'utf8'
+		len = buffer.length
+		stream.write new Buffer [len >> 24, len >> 16 & 255, len >> 8 & 255, len & 255]
+	emitter
+###

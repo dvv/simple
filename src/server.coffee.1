@@ -76,10 +76,10 @@ module.exports = (handler, options = {}) ->
 		#
 		comm = net.createConnection options.ipc
 		node.id = +process.env._WID_
-		node.publish = (channel, data) ->
+		node.publish = (cmd, data) ->
 			msg =
 				from: node.id
-				channel: channel
+				cmd: cmd
 				data: data
 			comm.write JSON.stringify(msg), 'utf8'
 		# connected to master -> ask configuration
@@ -106,7 +106,9 @@ module.exports = (handler, options = {}) ->
 		#	console.log "WORKER #{node.id} faulted to communicate: #{err}"
 		#	process.exit 0
 		#comm.resume()
-		#setInterval (() -> node.publish 'ping'), 1000
+		setInterval () ->
+			node.publish 'ping'
+		, 1000
 
 		#
 		# add websocket handler
@@ -172,78 +174,86 @@ module.exports = (handler, options = {}) ->
 		# chdir
 		process.chdir options.pwd if options.pwd
 
-		if options.workers
-			# allow to override workers arguments
-			args = options.argv or process.argv
-			# copy environment
-			env = _.extend {}, process.env, options.env or {}
+		# allow to override workers arguments
+		args = options.argv or process.argv
+		# copy environment
+		env = _.extend {}, process.env, options.env or {}
 
-			# array of listening processes
-			workers = []
+		# array of listening processes
+		workers = []
 
-			# create IPC socket
-			connections = []
-			# define publish
-			node.publish = (channel, data) ->
-				msg = JSON.stringify
-					from: null # master
-					channel: channel
-					data: data
-				, 'utf8'
-				connections.forEach (c) -> c.write msg
-			ipc = net.createServer (stream) ->
-				# worker is created -> pass it the master socket to listen to
-				#console.log 'CLIENT'
-				connections.push stream
-				stream.write '{"foo": "bar"}', 'ascii', socket
-				# listen to messages from the worker
-				stream.on 'data', (data) ->
-					# relay raw data to all known connections
-					connections.forEach (c) -> c.write data
-					# parse the message
-					try
-						data = data.toString 'utf8'
-						data = JSON.parse data
-					catch x
-					console.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
-					if data.channel is 'worker'
-						data.from
-				# communication ended -> remove connection
-				stream.on 'end', () ->
-					connections = _.without connections, stream
-				#stream.once 'error', (err) ->
-				#	console.log "ERROR ON COMM"
-			ipc.listen options.ipc
+		# create IPC socket
 
-			# create workers
-			spawn = require('child_process').spawn
-			createWorker = (id) ->
-				env._WID_ = id
-				# spawn worker process
-				worker = spawn args[0], args.slice(1),
-					#cwd: undefined
-					env: env
-					customFds: [0, 1, 2]
-					#setsid: false
-				# init respawning
-				worker.on 'exit', () ->
-					worker = null
-					createWorker id
-				# put worker to the slot
-				workers[id] = worker
+		connections = []
+		ipc = net.createServer (stream) ->
+			# worker is created -> pass it the master socket to listen to
+			#console.log 'CLIENT'
+			connections.push stream
+			stream.write '{"foo": "bar"}', 'ascii', socket
+			# listen to messages from the worker
+			stream.on 'data', (data) ->
+				# relay raw data to all known connections
+				connections.forEach (c) -> c.write data
+				#
+				#
+				#
+				return
+				#
+				#
+				#
+				# parse the message
+				try
+					data = data.toString('utf8')
+					data = JSON.parse data
+				catch x
+				console.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
+			# communication ended -> remove connection
+			stream.on 'end', () ->
+				connections = _.without connections, stream
+			#stream.once 'error', (err) ->
+			#	console.log "ERROR ON COMM"
+		ipc.listen options.ipc, () ->
+			comm = net.createConnection options.ipc
+			comm.on 'connect', () ->
+				# define publish
+				node.publish = (cmd, data) ->
+					msg =
+						from: null # master
+						cmd: cmd
+						data: data
+					comm.write JSON.stringify(msg), 'utf8'
+				return
 
-			createWorker id for id in [0...options.workers]
+		# create workers
+		spawn = require('child_process').spawn
+		createWorker = (id) ->
+			env._WID_ = id
+			# spawn worker process
+			worker = spawn args[0], args.slice(1),
+				#cwd: undefined
+				env: env
+				customFds: [0, 1, 2]
+				#setsid: false
+			# init respawning
+			worker.on 'exit', () ->
+				# FIXME: ipc flush!
+				workers[id] = null
+				createWorker id
+			# put worker to the slot
+			workers[id] = worker
+
+		createWorker id for id in [0...options.workers]
 
 		# handle signals
-		['SIGINT','SIGTERM','SIGKILL','SIGHUP','exit'].forEach (signal) ->
-			process.on signal, ->
+		'SIGINT|SIGTERM|SIGKILL|SIGQUIT|SIGHUP|exit'.split('|').forEach (signal) ->
+			process.on signal, () ->
 				workers.forEach (worker) ->
 					try
 						worker.kill()
 					catch e
 						worker.emit 'exit'
 				# we use SIGHUP to restart the workers
-				process.exit() unless signal in ['exit', 'SIGHUP']
+				process.exit() unless signal is 'exit' or signal is 'SIGHUP'
 
 		# report usage
 		console.log "#{options.workers} worker(s) running at http" +
@@ -264,5 +274,5 @@ module.exports = (handler, options = {}) ->
 		# respawn workers
 		process.kill process.pid, 'SIGHUP'
 
-	# nothing to expose
-	return
+	# return
+	node

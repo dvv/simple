@@ -4,7 +4,7 @@ deps='
 documentcloud/underscore/underscore.js:underscore.js
 creationix/stack/stack.js:stack.js
 cloudhead/node-static/lib:static
-jed/cookie-node/index.js:cookie.js
+#jed/cookie-node/index.js:cookie.js
 creationix/simple-mime/simple-mime.js:mime.js
 christkv/node-mongodb-native:mongodb
 bnoguchi/redis-node:redis
