@@ -355,14 +355,24 @@ module.exports.mount = (method, path, handler) ->
 #
 module.exports.chrome = (options = {}) ->
 
+	fs = require 'fs'
+
+	tmplSyntax =
+		evaluate    : /\{\{([\s\S]+?)\}\}/g
+		interpolate : /\{\{=([\s\S]+?)\}\}/g
+
 	handler = (req, res, next) ->
 
 		if req.method is 'GET' and req.url is '/'
-			console.log 'STATIC?', req.url
-			if req.context?.user?.type
-				res.send '<HTML>'+JSON.stringify(req.context.user)+'</HTML>'
-			else
-				res.send '<HTML1></HTML1>'
+			#console.log 'STATIC?', req.url
+			fs.readFile '../public/test.html', (err, html) ->
+				html = _.template html.toString('utf8'), req.context, tmplSyntax
+				#html = JSON.stringify req.context
+				#if req.context?.user?.type
+				#	res.send '<HTML>'+JSON.stringify(req.context.user)+'</HTML>'
+				#else
+				#	res.send '<HTML1></HTML1>'
+				res.send err or html
 		else
 			next()
 
@@ -378,7 +388,7 @@ module.exports.static_ = (options = {}) ->
 		# serve files
 		# no static file? -> none of our business
 		if req.method is 'GET'
-			#console.log 'STATIC?', req.url
+			console.log 'STATIC?', req.url
 			#if options.honorType and req.context?.user?.type
 			#	req.url = '/' + req.context.user.type + req.url
 			#console.log 'STATIC!', req.url
