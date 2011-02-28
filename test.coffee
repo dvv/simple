@@ -24,13 +24,14 @@ config =
 		#pwd: './secured-root'
 		#sslKey: 'key.pem'
 		#sslCert: 'cert.pem'
-		repl: true
+		repl: true #30000
 		pub:
 			dir: 'test'
 			ttl: 3600
 		stackTrace: true
-		#pubsub:
-		#	bcast: (channel, message) -> console.error 'BCAST', @id, channel, message
+		pubsub:
+			ping: (channel, message) ->
+				console.error 'PING', @id, channel, message
 		#websocket: true
 		ipc: '.ipc'
 

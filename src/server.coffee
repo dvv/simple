@@ -38,6 +38,7 @@
 module.exports = (handler, options = {}) ->
 
 	net = require 'net'
+	fs = require 'fs'
 
 	# options
 	options.port ?= 80
@@ -50,7 +51,6 @@ module.exports = (handler, options = {}) ->
 	# setup HTTP(S) server
 	#
 	if options.sslKey
-		fs = require 'fs'
 		credentials =
 			key: fs.readFileSync options.sslKey, 'utf8'
 			cert: fs.readFileSync options.sslCert, 'utf8'
@@ -86,13 +86,18 @@ module.exports = (handler, options = {}) ->
 		#
 		comm.on 'data', (data) ->
 			#console.log 'MESSAGE', data
+			# TODO: robustly determine message boundaries. BTW, which ones?
 			try
 				data = JSON.parse data
 			catch err
 			# skip self-emitted messages
 			return if data.from is node.id
-			console.log "MESSAGE for #{node.id}: " + JSON.stringify(data)
-			# TODO: relay to node.message
+			#console.log "MESSAGE for #{node.id}: " + JSON.stringify(data)
+			# pubsub
+			# TODO: channel pattern match?
+			if options.pubsub
+				options.pubsub[data.channel]?.call node, data.channel, data.data
+				options.pubsub.all?.call node, data.channel, data.data
 
 		#
 		# master socket has arrived
@@ -122,7 +127,7 @@ module.exports = (handler, options = {}) ->
 		#
 		# keep-alive?
 		#
-		#setInterval (() -> node.publish 'ping'), 5000
+		setInterval (() -> node.publish 'ping'), 5000
 
 	####################################################################
 	#
@@ -212,19 +217,18 @@ module.exports = (handler, options = {}) ->
 						data = data.toString 'utf8'
 						data = JSON.parse data
 					catch err
+						# TODO: this means message boundary is not reached? Continue collecting data?
 					#console.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
-					# register the worker
+					# register new worker
 					if data.channel is 'register'
 						workers[data.from] = stream
 						console.error "WORKER #{data.from} started"
-					else if data.channel is 'ping'
-						console.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
 
 				#
-				# worker has died
+				# worker has gone
 				#
 				stream.on 'end', () ->
-					# remove old worker
+					# unregister gone worker
 					workers = _.without workers, stream
 					# start new worker
 					spawnWorker()
@@ -303,6 +307,21 @@ module.exports = (handler, options = {}) ->
 					console.error "REPL running on 127.0.0.1:#{options.repl}. Use CTRL+C to stop."
 				else
 					console.error "REPL running on #{options.repl}. Use CTRL+C to stop."
+
+		#
+		# setup watchdog, to reload modified files
+		#
+		#
+		# TODO: elaborate
+		#
+		file = 'src/server.coffee'
+		fs.watchFile file, {interval: options.watch or 100}, (curr, prev) ->
+			return if restarting
+			if curr.mtime > prev.mtime
+				console.error '	changed', file
+				restarting = true
+				process.kill process.pid, 'SIGQUIT'
+				restarting = false
 
 	#
 	# uncaught exceptions cause workers respawn
