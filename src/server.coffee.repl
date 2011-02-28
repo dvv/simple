@@ -33,7 +33,7 @@
 ###
 
 #
-# node cluster factory, takes request handler and configuration
+# server farm factory, takes request handler and configuration
 #
 module.exports = (handler, options = {}) ->
 
@@ -59,116 +59,86 @@ module.exports = (handler, options = {}) ->
 	else
 		server = require('http').createServer handler
 
-	####################################################################
 	#
 	# worker branch
 	#
-	####################################################################
-
 	if process.env._NODE_WORKER_FOR_
-
-		# id is simply PID
-		node.id = process.pid
 
 		#
 		# establish communication with master
 		#
 		comm = net.createConnection options.ipc
-
-		#
-		# connected to master -> ask configuration
-		#
-		#comm.on 'connect', () ->
-		#	node.publish 'connect'
-
-		#
-		# message has arrived
-		#
-		comm.on 'data', (data) ->
-			#console.log 'MESSAGE', data
-			try
-				data = JSON.parse data
-			catch err
-			# skip self-emitted messages
-			return if data.from is node.id
-			console.log "MESSAGE for #{node.id}: " + JSON.stringify(data)
-			# TODO: relay to node.message
-
-		#
-		# master socket has arrived
-		#
-		comm.once 'fd', (fd) ->
-			# listen to the master socket
-			server.listenFD fd, 'tcp4'
-			# register the worker
-			node.publish 'register'
-
-		#
-		# master has gone -> shutdown
-		#
-		comm.once 'end', () ->
-			process.exit 0
-
-		#
-		# define message publisher
-		#
+		node.id = process.pid
 		node.publish = (channel, data) ->
 			msg =
 				from: node.id
 				channel: channel
 				data: data
 			comm.write JSON.stringify(msg), 'utf8'
+		# connected to master -> ask configuration
+		#comm.on 'connect', () ->
+		#	node.publish 'connect'
+		# message has arrived
+		comm.on 'data', (data) ->
+			console.log 'MESSAGE', data.toString('utf8')
+			try
+				data = JSON.parse data.toString('utf8')
+			catch x
+			# skip self-emitted messages
+			return if data.from is node.id
+			#console.log 'MESSAGE for %d: %s', node.id, data #JSON.stringify(data)
+		# master socket has arrived
+		comm.once 'fd', (fd) ->
+			server.listenFD fd, 'tcp4'
+			comm.write "register(#{node.id})"
+			console.log "WORKER started as PID #{process.pid}"
+		# communication with master broken -> exit
+		comm.once 'end', () ->
+			process.exit 0
+		#comm.resume()
+		counter = 0
+		setInterval (() -> comm.write 'ping()'), 2000
+		#setInterval (() -> node.publish 'ping', counter: counter), 2000
+		###
+		for counter in [0...1000000]
+			if `counter % 1000` is 0
+				node.publish 'ping', counter: counter
+			node.publish 'add'
+		###
 
-		#
-		# keep-alive?
-		#
-		#setInterval (() -> node.publish 'ping'), 5000
-
-	####################################################################
 	#
 	# master branch
 	#
-	####################################################################
-
 	else
 
 		node.id = 'master'
 
-		#
 		# bind master socket
-		#
 		netBinding = process.binding 'net'
 		socket = netBinding.socket 'tcp4'
 		netBinding.bind socket, options.port
 		netBinding.listen socket, options.connections or 1024
 
-		#
 		# attach the server if no workers needed
-		#
 		server.listenFD socket, 'tcp4' unless options.workers
 
-		#
 		# drop privileges
-		#
 		if process.getuid() is 0
 			process.setuid options.uid if options.uid
 			process.setgid options.gid if options.gid
 
-		#
 		# chdir
-		#
 		process.chdir options.pwd if options.pwd
 
-		#
-		# workers needed -> setup IPC and worker helpers
-		#
 		if options.workers
 
 			#
 			# utility to spawn worker process
 			#
-			args = options.argv or process.argv # allow to override workers arguments
-			env = _.extend {}, process.env, options.env or {} # copy environment
+			# allow to override workers arguments
+			args = options.argv or process.argv
+			# copy environment
+			env = _.extend {}, process.env, options.env or {}
 			spawnWorker = () ->
 				env._NODE_WORKER_FOR_ = process.pid
 				worker = require('child_process').spawn args[0], args.slice(1),
@@ -180,9 +150,7 @@ module.exports = (handler, options = {}) ->
 			# array of workers
 			workers = {}
 
-			#
-			# define broadcast message publisher
-			#
+			# define broadcast publisher
 			node.publish = (channel, data) ->
 				msg = JSON.stringify
 					from: null # master
@@ -191,65 +159,50 @@ module.exports = (handler, options = {}) ->
 				, 'utf8'
 				_.each workers, (worker) -> worker.write msg
 
+			# create IPC socket
 			#
-			# create IPC server
+			# TODO: what if use REPL here?!
 			#
 			ipc = net.createServer (stream) ->
-
 				#
 				# worker has born -> pass it configuration and the master socket to listen to
 				#
 				stream.write '{"foo": "bar"}', 'ascii', socket
-
 				#
-				# message from the worker
+				# install REPL to handle worker messages
 				#
-				stream.on 'data', (data) ->
-					# relay raw data to all known workers
-					_.each workers, (worker) -> worker.write data
-					# parse the message
-					try
-						data = data.toString 'utf8'
-						data = JSON.parse data
-					catch err
-					#console.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
-					# register the worker
-					if data.channel is 'register'
-						workers[data.from] = stream
-						console.error "WORKER #{data.from} started"
-					else if data.channel is 'ping'
-						console.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
-
+				_.extend require('repl').start('', stream).context,
+					register: (pid) ->
+						console.log "WORKERREGISTER #{pid}"
+						workers[pid] = stream
+						pid
+					ping: () ->
+						console.log 'PING'
+						'pong'
 				#
 				# worker has died
 				#
 				stream.on 'end', () ->
+					console.log 'WORKERDOWN'
 					# remove old worker
 					workers = _.without workers, stream
 					# start new worker
 					spawnWorker()
+			ipc.listen options.ipc
 
-			#
-			# start IPC server
-			#
-			ipc.listen options.ipc, () ->
-				# spawn initial workers
-				spawnWorker() for id in [0...options.workers]
-				return
+			# initially spawn workers
+			spawnWorker() for id in [0...options.workers]
 
-		#
 		# handle signals
-		#
 		['SIGINT','SIGTERM','SIGKILL','SIGUSR2','SIGHUP','SIGQUIT','exit'].forEach (signal) ->
 			process.on signal, () ->
-				console.error "MASTER signalled #{signal}"
-				# relay signal to all workers
+				console.error "Master got signal #{signal}"
 				_.each workers, (worker, pid) ->
 					try
 						process.kill pid, signal
-					catch err
+					catch exc
 						worker.emit 'exit'
-				# SIGHUP just restarts workers
+				# we use SIGHUP to restart the workers
 				process.exit() unless signal in ['exit', 'SIGHUP']
 
 		#
@@ -258,12 +211,7 @@ module.exports = (handler, options = {}) ->
 		# options.repl: true -- REPL on stdin
 		# options.repl: <number> -- REPL on localhost:<number>
 		# options.repl: <string> -- REPL on UNIX socket <string>
-		#
 		if options.repl
-
-			#
-			# define REPL handler and context
-			#
 			REPL = (stream) ->
 				repl = require('repl').start 'node>', stream
 				# expose master control interface
@@ -289,10 +237,7 @@ module.exports = (handler, options = {}) ->
 								else
 									throw err
 							console.log "STATUS for #{pid} is #{status}"
-
-			#
 			# start REPL
-			#
 			if options.repl is true
 				process.stdin.on 'close', process.exit
 				REPL()
@@ -314,7 +259,5 @@ module.exports = (handler, options = {}) ->
 		# TODO: what if process is worker process?
 		process.kill process.pid, 'SIGHUP'
 
-	#
 	# nothing to expose
-	#
 	return
