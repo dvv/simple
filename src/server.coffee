@@ -33,6 +33,25 @@
 ###
 
 #
+# borrowed from 'cluster'.
+# takes chunks in buffer. when the buffer contains valid JSON literal
+# reset the buffer and emit 'message' event passing parsed JSON as parameter
+#
+# usage: stream.on('data', framing.bind(stream))
+#
+framing = (chunk) ->
+	buf = buf or ''
+	braces = braces or 0
+	for c, i in chunk
+		++braces if '{' is c
+		--braces if '}' is c
+		buf += c
+		if 0 is braces
+			obj = JSON.parse buf
+			buf = ''
+			@emit 'message', obj
+
+#
 # node cluster factory, takes request handler and configuration
 #
 module.exports = (handler, options = {}) ->
@@ -57,6 +76,13 @@ module.exports = (handler, options = {}) ->
 	if process.env._NODE_WORKER_FOR_
 
 		#
+		# define logger
+		#
+		node.log = (args...) ->
+			args[0] = "WORKER #{node.id}: " + args[0]
+			console.error.apply console, args
+
+		#
 		# setup HTTP(S) server
 		#
 		if options.sslKey
@@ -71,8 +97,8 @@ module.exports = (handler, options = {}) ->
 		#
 		# setup signals
 		#
-		node.on 'SIGQUIT', () ->
-			console.error "WORKER #{node.id}: shutting down..."
+		process.on 'SIGQUIT', () ->
+			node.log 'shutting down...'
 			if server.connections
 				# stop accepting
 				server.watcher.stop()
@@ -86,13 +112,13 @@ module.exports = (handler, options = {}) ->
 		#
 		# exit
 		#
-		node.on 'exit', () ->
-			console.error "WORKER #{node.id}: shutdown"
+		process.on 'exit', () ->
+			node.log 'shutdown'
 		#
 		# uncaught exceptions cause worker shutdown
 		#
 		process.on 'uncaughtException', (err) ->
-			console.error "EXCEPTION in WORKER #{node.id}: #{err.stack or err.message}"
+			node.log "EXCEPTION: #{err.stack or err.message}"
 			process.exit 1
 
 		#
@@ -101,21 +127,21 @@ module.exports = (handler, options = {}) ->
 		comm = net.createConnection options.ipc
 
 		#
-		# connected to master -> ask configuration
+		# connected to master -> setup the stream
 		#
-		#comm.on 'connect', () ->
-		#	node.publish 'connect'
+		comm.on 'connect', () ->
+			comm.setEncoding 'utf8'
+			#node.publish 'connect'
+
+		#
+		# wait for complete JSON object to come, parse it and emit 'message' event
+		#
+		comm.on 'data', framing.bind comm
 
 		#
 		# message has arrived
 		#
-		comm.on 'data', (data) ->
-			#console.log 'MESSAGE', data
-			# TODO: robustly determine message boundaries. BTW, which ones?
-			try
-				data = JSON.parse data
-			catch err
-				# TODO: this means message boundary is not reached? Continue collecting data?
+		comm.on 'message', (data) ->
 			# skip self-emitted messages
 			return if data.from is node.id
 			# pubsub
@@ -148,7 +174,7 @@ module.exports = (handler, options = {}) ->
 				from: node.id
 				channel: channel
 				data: data
-			comm.write JSON.stringify(msg), 'utf8'
+			comm.write JSON.stringify msg
 
 		#
 		# keep-alive?
@@ -164,6 +190,13 @@ module.exports = (handler, options = {}) ->
 	else
 
 		node.id = 'master'
+
+		#
+		# define logger
+		#
+		node.log = (args...) ->
+			args[0] = "MASTER: " + args[0]
+			console.error.apply console, args
 
 		#
 		# bind master socket
@@ -193,7 +226,6 @@ module.exports = (handler, options = {}) ->
 		env = _.extend {}, process.env, options.env or {} # copy environment
 		spawnWorker = () ->
 			env._NODE_WORKER_FOR_ = process.pid
-			console.log 'ARGS', args
 			worker = require('child_process').spawn args[0], args.slice(1),
 				#cwd: undefined
 				env: env
@@ -203,13 +235,12 @@ module.exports = (handler, options = {}) ->
 		#
 		# define broadcast message publisher
 		#
-		node.publish = (channel, data) ->
-			msg = JSON.stringify
+		node.publish = (channel, message) ->
+			data = JSON.stringify
 				from: null # master
 				channel: channel
-				data: data
-			, 'utf8'
-			_.each workers, (worker) -> worker.write msg
+				data: message
+			_.each workers, (worker) -> worker.write data
 
 		#
 		# create IPC server
@@ -217,27 +248,34 @@ module.exports = (handler, options = {}) ->
 		ipc = net.createServer (stream) ->
 
 			#
+			# setup the stream
+			#
+			stream.setEncoding 'utf8'
+
+			#
 			# worker has born -> pass it configuration and the master socket to listen to
 			#
 			stream.write '{"foo": "bar"}', 'ascii', socket
 
 			#
+			# relay raw data to all known workers
+			#
+			stream.on 'data', (data) -> _.each workers, (worker) -> worker.write data
+
+			#
+			# wait for complete JSON object to come, parse it and emit 'message' event
+			#
+			stream.on 'data', framing.bind stream
+
+			#
 			# message from the worker
 			#
-			stream.on 'data', (data) ->
-				# relay raw data to all known workers
-				_.each workers, (worker) -> worker.write data
-				# parse the message
-				try
-					data = data.toString 'utf8'
-					data = JSON.parse data
-				catch err
-					# TODO: this means message boundary is not reached? Continue collecting data?
-				#console.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
+			stream.on 'message', (data) ->
+				#node.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
 				# register new worker
 				if data.channel is 'register'
 					workers[data.from] = stream
-					console.error "WORKER #{data.from} started and listening to *:#{options.port}"
+					node.log "WORKER #{data.from} started and listening to *:#{options.port}"
 
 			#
 			# worker has gone
@@ -261,14 +299,14 @@ module.exports = (handler, options = {}) ->
 		#
 		['SIGINT','SIGTERM','SIGKILL','SIGUSR2','SIGHUP','SIGQUIT','exit'].forEach (signal) ->
 			process.on signal, () ->
-				console.error "MASTER signalled #{signal}"
+				node.log "signalled #{signal}"
 				# relay signal to all workers
 				_.each workers, (worker, pid) ->
 					try
-						console.error "SENDING #{signal} to #{pid}"
+						node.log "sending #{signal} to WORKER #{pid}"
 						process.kill pid, signal
 					catch err
-						console.error "EMERGENCY exit to #{pid}"
+						node.log "sending EMERGENCY exit to WORKER #{pid}"
 						worker.emit 'exit'
 				# SIGHUP just restarts workers, SIGQUIT gracefully restarts workers
 				process.exit() unless signal in ['exit', 'SIGHUP', 'SIGQUIT']
@@ -333,13 +371,13 @@ module.exports = (handler, options = {}) ->
 			if options.repl is true
 				process.stdin.on 'close', process.exit
 				REPL()
-				console.error "REPL running in the console. Use CTRL+C to stop."
+				node.log "REPL running in the console. Use CTRL+C to stop."
 			else
 				net.createServer(REPL).listen options.repl
 				if _.isNumber options.repl
-					console.error "REPL running on 127.0.0.1:#{options.repl}. Use CTRL+C to stop."
+					node.log "REPL running on 127.0.0.1:#{options.repl}. Use CTRL+C to stop."
 				else
-					console.error "REPL running on #{options.repl}. Use CTRL+C to stop."
+					node.log "REPL running on #{options.repl}. Use CTRL+C to stop."
 
 		#
 		# setup watchdog, to reload modified source files
@@ -354,12 +392,11 @@ module.exports = (handler, options = {}) ->
 			require('child_process').exec cmd, (error, out) ->
 				restarting = false
 				files = out.trim().split '\n'
-				console.error 'watch', files
 				files.forEach (file) ->
 					fs.watchFile file, {interval: options.watch or 100}, (curr, prev) ->
 						return if restarting
 						if curr.mtime > prev.mtime
-							console.error 'changed', file
+							node.log "#{file} has changed, respawning"
 							restarting = true
 							process.kill process.pid, 'SIGQUIT'
 							restarting = false
@@ -368,7 +405,7 @@ module.exports = (handler, options = {}) ->
 		# uncaught exceptions cause workers respawn
 		#
 		process.on 'uncaughtException', (err) ->
-			console.error "EXCEPTION in MASTER: #{err.stack or err.message}"
+			node.log "EXCEPTION: #{err.stack or err.message}"
 			process.kill process.pid, 'SIGHUP'
 
 	#
