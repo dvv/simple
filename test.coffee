@@ -18,7 +18,7 @@ config =
 	server:
 
 		port: 3000
-		workers: require('os').cpus().length
+		#workers: 2
 		#uid: 65534
 		#gid: 65534
 		#pwd: './secured-root'
@@ -32,6 +32,7 @@ config =
 		pubsub:
 			ping: (channel, message) ->
 				console.error 'PING', @id, channel, message
+		watch: [__filename]
 		#websocket: true
 		ipc: '.ipc'
 

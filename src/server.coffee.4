@@ -42,11 +42,22 @@ module.exports = (handler, options = {}) ->
 
 	# options
 	options.port ?= 80
-	nworkers = options.workers or require('os').cpus().length
 	options.ipc ?= '.ipc'
 
 	#
 	node = new process.EventEmitter()
+
+	#
+	# setup HTTP(S) server
+	#
+	if options.sslKey
+		credentials =
+			key: fs.readFileSync options.sslKey, 'utf8'
+			cert: fs.readFileSync options.sslCert, 'utf8'
+			#ca: options.sslCACerts.map (fname) -> fs.readFileSync fname, 'utf8'
+		server = require('https').createServer credentials, handler
+	else
+		server = require('http').createServer handler
 
 	####################################################################
 	#
@@ -55,45 +66,6 @@ module.exports = (handler, options = {}) ->
 	####################################################################
 
 	if process.env._NODE_WORKER_FOR_
-
-		#
-		# setup HTTP(S) server
-		#
-		if options.sslKey
-			credentials =
-				key: fs.readFileSync options.sslKey, 'utf8'
-				cert: fs.readFileSync options.sslCert, 'utf8'
-				#ca: options.sslCACerts.map (fname) -> fs.readFileSync fname, 'utf8'
-			server = require('https').createServer credentials, handler
-		else
-			server = require('http').createServer handler
-
-		#
-		# setup signals
-		#
-		node.on 'SIGQUIT', () ->
-			console.error "WORKER #{node.id}: shutting down..."
-			if server.connections
-				# stop accepting
-				server.watcher.stop()
-				# check pending connections
-				setInterval (-> server.connections or process.exit 0), 2000
-				# timeout
-				if options.timeout
-					setTimeout (-> process.exit 0), options.timeout
-			else
-				process.exit 0
-		#
-		# exit
-		#
-		node.on 'exit', () ->
-			console.error "WORKER #{node.id}: shutdown"
-		#
-		# uncaught exceptions cause worker shutdown
-		#
-		process.on 'uncaughtException', (err) ->
-			console.error "EXCEPTION in WORKER #{node.id}: #{err.stack or err.message}"
-			process.exit 1
 
 		#
 		# establish communication with master
@@ -129,7 +101,7 @@ module.exports = (handler, options = {}) ->
 		#
 		comm.once 'fd', (fd) ->
 			# listen to the master socket
-			server.listenFD fd
+			server.listenFD fd, 'tcp4'
 			# register the worker
 			node.id = process.pid # id is simply PID
 			node.publish 'register'
@@ -153,7 +125,7 @@ module.exports = (handler, options = {}) ->
 		#
 		# keep-alive?
 		#
-		#setInterval (() -> node.publish 'ping'), 2000
+		setInterval (() -> node.publish 'ping'), 2000
 
 	####################################################################
 	#
@@ -169,9 +141,14 @@ module.exports = (handler, options = {}) ->
 		# bind master socket
 		#
 		netBinding = process.binding 'net'
-		socket = netBinding.socket 'tcp' + (if netBinding.isIP(options.host) is 6 then 6 else 4)
+		socket = netBinding.socket 'tcp4'
 		netBinding.bind socket, options.port
 		netBinding.listen socket, options.connections or 1024
+
+		#
+		# master listens unless workers needed
+		#
+		server.listenFD socket, 'tcp4' unless options.workers
 
 		#
 		# drop privileges
@@ -186,75 +163,81 @@ module.exports = (handler, options = {}) ->
 		process.chdir options.pwd if options.pwd
 
 		#
-		# setup IPC
+		# workers needed -> setup IPC
 		#
-		workers = {} # array of workers
-		args = options.argv or process.argv # allow to override workers arguments
-		env = _.extend {}, process.env, options.env or {} # copy environment
-		spawnWorker = () ->
-			env._NODE_WORKER_FOR_ = process.pid
-			console.log 'ARGS', args
-			worker = require('child_process').spawn args[0], args.slice(1),
-				#cwd: undefined
-				env: env
-				customFds: [0, process.stdout, process.stderr]
-				#setsid: false
-
-		#
-		# define broadcast message publisher
-		#
-		node.publish = (channel, data) ->
-			msg = JSON.stringify
-				from: null # master
-				channel: channel
-				data: data
-			, 'utf8'
-			_.each workers, (worker) -> worker.write msg
-
-		#
-		# create IPC server
-		#
-		ipc = net.createServer (stream) ->
+		if options.workers
 
 			#
-			# worker has born -> pass it configuration and the master socket to listen to
+			# utility to spawn worker process
 			#
-			stream.write '{"foo": "bar"}', 'ascii', socket
+			args = options.argv or process.argv # allow to override workers arguments
+			env = _.extend {}, process.env, options.env or {} # copy environment
+			spawnWorker = () ->
+				env._NODE_WORKER_FOR_ = process.pid
+				worker = require('child_process').spawn args[0], args.slice(1),
+					#cwd: undefined
+					env: env
+					customFds: [0, process.stdout, process.stderr]
+					#setsid: false
+
+			# array of workers
+			workers = {}
 
 			#
-			# message from the worker
+			# define broadcast message publisher
 			#
-			stream.on 'data', (data) ->
-				# relay raw data to all known workers
-				_.each workers, (worker) -> worker.write data
-				# parse the message
-				try
-					data = data.toString 'utf8'
-					data = JSON.parse data
-				catch err
-					# TODO: this means message boundary is not reached? Continue collecting data?
-				#console.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
-				# register new worker
-				if data.channel is 'register'
-					workers[data.from] = stream
-					console.error "WORKER #{data.from} started and listening to *:#{options.port}"
+			node.publish = (channel, data) ->
+				msg = JSON.stringify
+					from: null # master
+					channel: channel
+					data: data
+				, 'utf8'
+				_.each workers, (worker) -> worker.write msg
 
 			#
-			# worker has gone
+			# create IPC server
 			#
-			stream.on 'end', () ->
-				# unregister gone worker
-				workers = _.without workers, stream
-				# start new worker
-				spawnWorker() if nworkers > _.size workers
+			ipc = net.createServer (stream) ->
 
-		#
-		# start IPC server
-		#
-		ipc.listen options.ipc, () ->
-			# spawn initial workers
-			spawnWorker() for id in [0...nworkers]
-			return
+				#
+				# worker has born -> pass it configuration and the master socket to listen to
+				#
+				stream.write '{"foo": "bar"}', 'ascii', socket
+
+				#
+				# message from the worker
+				#
+				stream.on 'data', (data) ->
+					# relay raw data to all known workers
+					_.each workers, (worker) -> worker.write data
+					# parse the message
+					try
+						data = data.toString 'utf8'
+						data = JSON.parse data
+					catch err
+						# TODO: this means message boundary is not reached? Continue collecting data?
+					#console.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
+					# register new worker
+					if data.channel is 'register'
+						workers[data.from] = stream
+						console.error "WORKER #{data.from} started"
+
+				#
+				# worker has gone
+				#
+				stream.on 'end', () ->
+					# unregister gone worker
+					workers = _.without workers, stream
+					# start new worker
+					spawnWorker()
+
+			#
+			# start IPC server
+			#
+			ipc.listen options.ipc, () ->
+				# spawn initial workers
+				spawnWorker() for id in [0...options.workers]
+				return
 
 		#
 		# handle signals
@@ -265,13 +248,11 @@ module.exports = (handler, options = {}) ->
 				# relay signal to all workers
 				_.each workers, (worker, pid) ->
 					try
-						console.error "SENDING #{signal} to #{pid}"
 						process.kill pid, signal
 					catch err
-						console.error "EMERGENCY exit to #{pid}"
 						worker.emit 'exit'
-				# SIGHUP just restarts workers, SIGQUIT gracefully restarts workers
-				process.exit() unless signal in ['exit', 'SIGHUP', 'SIGQUIT']
+				# SIGHUP just restarts workers
+				process.exit() unless signal in ['exit', 'SIGHUP']
 
 		#
 		# REPL
@@ -290,29 +271,13 @@ module.exports = (handler, options = {}) ->
 				# expose master control interface
 				_.extend repl.context,
 					shutdown: () ->
-						nworkers = 0
-						process.kill process.pid, 'SIGQUIT'
-						process.exit 0
-					stop: () ->
-						process.exit 0
-					respawn: () ->
 						process.kill process.pid, 'SIGQUIT'
 					restart: () ->
 						process.kill process.pid, 'SIGHUP'
+					stop: () ->
+						process.exit 0
 					spawn: (n) ->
-						# add workers
-						if n > 0
-							while n-- > 0
-								spawnWorker()
-								# adjust max workers count
-								++nworkers
-						# remove workers
-						else if n < 0
-							# adjust max workers count
-							nworkers += n
-							nworkers = 0 if nworkers < 0
-							# shutdown all workers, spawn at most nworkers
-							process.kill process.pid, 'SIGQUIT'
+						spawnWorker() while n-- > 0
 						return
 					status: () ->
 						_.each workers, (worker, pid) ->
@@ -342,34 +307,29 @@ module.exports = (handler, options = {}) ->
 					console.error "REPL running on #{options.repl}. Use CTRL+C to stop."
 
 		#
-		# setup watchdog, to reload modified source files
-		# taken from spark2
+		# setup watchdog, to reload modified files
 		#
 		#
-		# TODO: elaborate on inhibit restarting if restarting in progress
+		# TODO: elaborate
 		#
-		if options.watch
-			watch = options.watch.join(' ')
-			cmd = "find #{watch} -name '*.js' -o -name '*.coffee'"
-			require('child_process').exec cmd, (error, out) ->
+		file = 'src/server.coffee'
+		fs.watchFile file, {interval: options.watch or 100}, (curr, prev) ->
+			return if restarting
+			if curr.mtime > prev.mtime
+				console.error '	changed', file
+				restarting = true
+				process.kill process.pid, 'SIGQUIT'
 				restarting = false
-				files = out.trim().split '\n'
-				console.error 'watch', files
-				files.forEach (file) ->
-					fs.watchFile file, {interval: options.watch or 100}, (curr, prev) ->
-						return if restarting
-						if curr.mtime > prev.mtime
-							console.error 'changed', file
-							restarting = true
-							process.kill process.pid, 'SIGQUIT'
-							restarting = false
 
-		#
-		# uncaught exceptions cause workers respawn
-		#
-		process.on 'uncaughtException', (err) ->
-			console.error "EXCEPTION in MASTER: #{err.stack or err.message}"
-			process.kill process.pid, 'SIGHUP'
+	#
+	# uncaught exceptions cause workers respawn
+	#
+	process.on 'uncaughtException', (err) ->
+		# http://www.debuggable.com/posts/node-js-dealing-with-uncaught-exceptions:4c933d54-1428-443c-928d-4e1ecbdd56cb
+		console.log 'Caught exception: ' + err.stack
+		# respawn workers
+		# TODO: what if process is worker process?
+		process.kill process.pid, 'SIGHUP'
 
 	#
 	# nothing to expose
