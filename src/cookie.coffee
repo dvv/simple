@@ -63,7 +63,7 @@ class Cookie
 		cookie += '; expires=' + expires.toUTCString() if expires
 		cookie += '; domain=' + options.domain if options.domain
 		cookie += '; secure' if options.secure
-		cookie += '; httponly' if options.httpOnly
+		cookie += '; httponly' unless options.httpOnly is false
 		#return cookie
 		header = @res.getHeader 'Set-Cookie'
 		if not header
@@ -89,19 +89,3 @@ class Cookie
 				undefined
 
 module.exports = Cookie
-
-###
-_ = require 'underscore'
-
-req = {}
-res = {}
-
-owen = new Cookie req, res, 'SECRT'
-enc = owen.set 'uid', 'root', secure: true, expires: -3000
-console.log enc, new Date().toUTCString()
-#console.log owen.get 'uid'
-setInterval () ->
-	owen.req = enc
-	console.log owen.get 'uid'
-, 1000
-###

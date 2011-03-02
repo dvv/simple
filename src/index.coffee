@@ -32,8 +32,6 @@
 
 ###
 
-require.paths.unshift './node_modules'
-
 #
 # improve console.log
 #

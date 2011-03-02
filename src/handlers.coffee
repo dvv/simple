@@ -137,21 +137,8 @@ module.exports.authCookie = (options = {}) ->
 	if getContext
 
 		# helper to set/clear secured cookie
-		require('http').ServerResponse::setSession0000 = (session) ->
-			cookieOptions = path: '/', httpOnly: true
-			if _.isObject session
-				# set the cookie
-				cookieOptions.expires = session.expires if session.expires
-				@setSecureCookie cookie, session.uid, cookieOptions
-				undefined
-			else
-				# clear the cookie
-				@clearCookie cookie, cookieOptions
-				session
-
-		# helper to set/clear secured cookie
 		require('http').ServerResponse::setSession = (session) ->
-			cookieOptions = path: '/', httpOnly: true
+			cookieOptions = path: '/'
 			if _.isObject session
 				# set the cookie
 				cookieOptions.expires = session.expires if session.expires
@@ -163,22 +150,33 @@ module.exports.authCookie = (options = {}) ->
 				session
 
 		#
+		# contexts cache
+		# TODO: how to reset?
+		#
+		cache = {}
+
+		#
 		# handler
 		#
 		(req, res, next) ->
 			req.cookie = new Cookie req, res, options.secret
 			# get the user ID
-			uid = req.cookie.get cookie
+			# N.B. we use '' for all falsy uids
+			uid = req.cookie.get(cookie) or ''
 			#console.log "UID #{uid}"
 			# attach context of that user to the request
-			getContext uid, (err, context) ->
-				# N.B. any error in getting user just means no user
-				req.context = context or user: {}
-				#console.log "USER", req.context.user
-				# freeze the context
-				#Object.freeze context
-				#
+			if cache[uid]
+				req.context = cache[uid]
 				next()
+			else
+				getContext uid, (err, context) ->
+					# N.B. any error in getting user just means no user
+					cache[uid] = req.context = context or user: {}
+					#console.log "USER", req.context.user
+					# freeze the context
+					#Object.freeze context
+					#
+					next()
 	else
 		(req, res, next) ->
 			# null user

@@ -2,6 +2,7 @@
 'use strict'
 
 process.argv.shift() # still report 'node' as argv[0]
+require.paths.unshift './node_modules' # coffee counts from coffee-script binary so far
 
 simple = require './src'
 
@@ -18,7 +19,7 @@ config =
 	server:
 
 		port: 3000
-		#workers: 2
+		#workers: 3
 		#uid: 65534
 		#gid: 65534
 		#pwd: './secured-root'
@@ -34,7 +35,7 @@ config =
 				console.error 'PING', @id, channel, message
 		watch: [__filename, 'test', 'src']
 		shutdownTimeout: 10000
-		websocket: true
+		#websocket: true
 		ipc: '.ipc'
 
 	security:
@@ -180,12 +181,22 @@ All {},
 		#
 		handler = simple.stack(
 
+			#simple.handlers.static_
+			#	dir: config.server.pub.dir
+			#	ttl: config.server.pub.ttl
+
+			#require('./node_modules/stack.static') config.server.pub.dir,
+			#	default: 'index.html'
+
 			simple.handlers.jsonBody
 				maxLength: 0 # set to >0 to limit the number of bytes
 
 			simple.handlers.mount '/foo1',
-				get: (req, res, next) -> res.send 'GETFOO1'
+				get: (req, res, next) -> res.send 'GOT FROM HOME'
 				post: (req, res, next) -> res.send 'POSTFOO1'
+
+			simple.handlers.mount 'GET', '/foo2', (req, res, next) ->
+				res.send 'GOT FROM HOME'
 
 			simple.handlers.authCookie
 				cookie: 'uid'
@@ -216,13 +227,6 @@ All {},
 
 			simple.handlers.mount 'POST', '/foo', (req, res, next) ->
 				res.send 'POSTED TO FOO'
-
-			#simple.handlers.static_
-			#	dir: config.server.pub.dir
-			#	ttl: config.server.pub.ttl
-
-			require('./node_modules/stack.static') config.server.pub.dir,
-				default: 'index.html'
 
 		)
 
