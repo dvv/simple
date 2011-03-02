@@ -351,46 +351,52 @@ module.exports.mount = (method, path, handler) ->
 #
 # serve chrome page
 #
-module.exports.chrome = (options = {}) ->
+
+###
+
+# TODO: code
+
+_.mixin
+	#
+	# memoize an expensive function by storing its results
+	#
+	memoizeAsync: (func, key, args..., callback) ->
+		cache = {}
+		() ->
+			if cache.hasOwnProperty(key)
+				callback cache[key]
+			else
+				func args, (err, result) ->
+					cache[key] = result
+					callback? err, result
+###
+
+
+module.exports.dynamic = (options = {}) ->
 
 	fs = require 'fs'
 
-	tmplSyntax =
+	tmplSyntax = options.syntax or {
 		evaluate    : /\{\{([\s\S]+?)\}\}/g
 		interpolate : /\{\{=([\s\S]+?)\}\}/g
+	}
+
+	#
+	# dynamic pages cache
+	# TODO: how to reset?
+	#
+	cache = {}
 
 	handler = (req, res, next) ->
 
-		if req.method is 'GET' and req.url is '/'
-			#console.log 'STATIC?', req.url
-			fs.readFile '../public/test.html', (err, html) ->
-				html = _.template html.toString('utf8'), req.context, tmplSyntax
-				#html = JSON.stringify req.context
-				#if req.context?.user?.type
-				#	res.send '<HTML>'+JSON.stringify(req.context.user)+'</HTML>'
-				#else
-				#	res.send '<HTML1></HTML1>'
-				res.send err or html
-		else
-			next()
-
-#
-# serve static content
-#
-module.exports.static_ = (options = {}) ->
-
-	static_ = new (require('static/node-static').Server)( options.dir or 'public', cache: options.ttl or 3600 )
-
-	handler = (req, res, next) ->
-
-		# serve files
-		# no static file? -> none of our business
-		if req.method is 'GET'
-			#console.log 'STATIC?', req.url
-			#if options.honorType and req.context?.user?.type
-			#	req.url = '/' + req.context.user.type + req.url
-			#console.log 'STATIC!', req.url
-			static_.serve req, res, (err, data) ->
-				next() if err?.status is 404
+		#console.log 'STATIC?', req
+		if req.method is 'GET' and file = options.map[req.location.pathname]
+			if cache[file]
+				res.send cache[file] req.context
+			else
+				fs.readFile file, (err, html) ->
+					return next err if err
+					cache[file] = _.template html.toString('utf8'), null, tmplSyntax
+					res.send cache[file] req.context
 		else
 			next()

@@ -19,6 +19,7 @@
   <script>
     //io.setPath('ws');
     //WEB_SOCKET_SWF_LOCATION = 'ws/lib/vendor/web-socket-js/WebSocketMain.swf
+    var cid = '{{=123}}';
     var socket = window.socket = new io.Socket();
     socket.connect();
     socket.on('connect', function(){console.log('CONN', arguments);})

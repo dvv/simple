@@ -168,6 +168,7 @@ All {},
 		app = Object.freeze
 			getContext: (uid, next) ->
 				context = _.extend.apply null, [{}, facet]
+				# FIXME: _.freeze is very consuming!
 				next? null, _.freeze context
 		next null, app
 
@@ -180,10 +181,6 @@ All {},
 		# define middleware stack
 		#
 		handler = simple.stack(
-
-			#simple.handlers.static_
-			#	dir: config.server.pub.dir
-			#	ttl: config.server.pub.ttl
 
 			#require('./node_modules/stack.static') config.server.pub.dir,
 			#	default: 'index.html'
@@ -216,7 +213,7 @@ All {},
 				query = _.rql decodeURI(req.location.search or '')
 				res.send _.query(geo, query)
 
-			simple.handlers.mount 'GET', '/l6000', (req, res, next) ->
+			simple.handlers.mount 'GET', '/b6000', (req, res, next) ->
 				res.send TESTSTR6000
 			simple.handlers.mount 'GET', '/l12000', (req, res, next) ->
 				res.send TESTSTR12000
@@ -225,8 +222,18 @@ All {},
 
 			simple.handlers.jsonrpc()
 
+			simple.handlers.mount 'GET', '/a6000', (req, res, next) ->
+				res.send TESTSTR6000
+
+			simple.handlers.mount 'GET', '/foo3', (req, res, next) ->
+				res.send 'GOT FROM HOME'
+
 			simple.handlers.mount 'POST', '/foo', (req, res, next) ->
 				res.send 'POSTED TO FOO'
+
+			simple.handlers.dynamic
+				map:
+					'/chrome': 'test/index.html'
 
 		)
 
