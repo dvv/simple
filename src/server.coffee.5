@@ -64,6 +64,9 @@ module.exports = (handler, options = {}) ->
 	nworkers = options.workers or require('os').cpus().length
 	options.ipc ?= '.ipc'
 
+	#
+	node = new process.EventEmitter()
+
 	####################################################################
 	#
 	# worker branch
@@ -75,8 +78,8 @@ module.exports = (handler, options = {}) ->
 		#
 		# define logger
 		#
-		process.log = (args...) ->
-			args[0] = "WORKER #{process.pid}: " + args[0]
+		node.log = (args...) ->
+			args[0] = "WORKER #{node.id}: " + args[0]
 			console.error.apply console, args
 
 		#
@@ -108,9 +111,6 @@ module.exports = (handler, options = {}) ->
 				client.on 'message', (message) ->
 					msg =
 						message: [client.sessionId, message]
-					process.log "WEBMESSAGE", msg
-					client.send
-						foo: 'bar'
 					client.broadcast msg
 				client.on 'disconnect', () ->
 					client.broadcast
@@ -124,7 +124,7 @@ module.exports = (handler, options = {}) ->
 		#
 		if options.shutdownTimeout
 			process.on 'SIGQUIT', () ->
-				@log 'shutting down...'
+				node.log 'shutting down...'
 				if server.connections
 					# stop accepting
 					server.watcher.stop()
@@ -133,18 +133,18 @@ module.exports = (handler, options = {}) ->
 					# timeout
 					setTimeout (-> process.exit 0), options.shutdownTimeout
 				else
-					@exit 0
+					process.exit 0
 		#
 		# exit
 		#
 		process.on 'exit', () ->
-			@log 'shutdown'
+			node.log 'shutdown'
 		#
 		# uncaught exceptions cause worker shutdown
 		#
 		process.on 'uncaughtException', (err) ->
-			@log "EXCEPTION: #{err.stack or err.message}"
-			@exit 1
+			node.log "EXCEPTION: #{err.stack or err.message}"
+			process.exit 1
 
 		#
 		# establish communication with master
@@ -156,7 +156,7 @@ module.exports = (handler, options = {}) ->
 		#
 		comm.on 'connect', () ->
 			comm.setEncoding 'utf8'
-			#process.publish 'connect'
+			#node.publish 'connect'
 
 		#
 		# wait for complete JSON object to come, parse it and emit 'message' event
@@ -168,12 +168,12 @@ module.exports = (handler, options = {}) ->
 		#
 		comm.on 'message', (data) ->
 			# skip self-emitted messages
-			return if data.from is process.pid
+			return if data.from is node.id
 			# pubsub
 			# TODO: channel pattern match?
 			if options.pubsub
-				options.pubsub[data.channel]?.call process, data.channel, data.data
-				options.pubsub.all?.call process, data.channel, data.data
+				options.pubsub[data.channel]?.call node, data.channel, data.data
+				options.pubsub.all?.call node, data.channel, data.data
 
 		#
 		# master socket has arrived
@@ -182,7 +182,8 @@ module.exports = (handler, options = {}) ->
 			# listen to the master socket
 			server.listenFD fd
 			# register the worker
-			process.publish 'register'
+			node.id = process.pid # id is simply PID
+			node.publish 'register'
 
 		#
 		# master has gone -> exit
@@ -193,9 +194,9 @@ module.exports = (handler, options = {}) ->
 		#
 		# define message publisher
 		#
-		process.publish = (channel, data) ->
+		node.publish = (channel, data) ->
 			msg =
-				from: @pid
+				from: node.id
 				channel: channel
 				data: data
 			comm.write JSON.stringify msg
@@ -203,7 +204,7 @@ module.exports = (handler, options = {}) ->
 		#
 		# keep-alive?
 		#
-		#setInterval (() -> process.publish 'ping'), 2000
+		#setInterval (() -> node.publish 'ping'), 2000
 
 	####################################################################
 	#
@@ -213,10 +214,12 @@ module.exports = (handler, options = {}) ->
 
 	else
 
+		node.id = 'master'
+
 		#
 		# define logger
 		#
-		process.log = (args...) ->
+		node.log = (args...) ->
 			args[0] = "MASTER: " + args[0]
 			console.error.apply console, args
 
@@ -257,7 +260,7 @@ module.exports = (handler, options = {}) ->
 		#
 		# define broadcast message publisher
 		#
-		process.publish = (channel, message) ->
+		node.publish = (channel, message) ->
 			data = JSON.stringify
 				from: null # master
 				channel: channel
@@ -293,11 +296,11 @@ module.exports = (handler, options = {}) ->
 			# message from the worker
 			#
 			stream.on 'message', (data) ->
-				#process.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
+				#node.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
 				# register new worker
 				if data.channel is 'register'
 					workers[data.from] = stream
-					process.log "WORKER #{data.from} started and listening to *:#{options.port}"
+					node.log "WORKER #{data.from} started and listening to *:#{options.port}"
 
 			#
 			# worker has gone
@@ -321,14 +324,14 @@ module.exports = (handler, options = {}) ->
 		#
 		['SIGINT','SIGTERM','SIGKILL','SIGUSR2','SIGHUP','SIGQUIT','exit'].forEach (signal) ->
 			process.on signal, () ->
-				@log "signalled #{signal}"
+				node.log "signalled #{signal}"
 				# relay signal to all workers
 				_.each workers, (worker, pid) ->
 					try
-						process.log "sending #{signal} to WORKER #{pid}"
+						node.log "sending #{signal} to WORKER #{pid}"
 						process.kill pid, signal
 					catch err
-						process.log "sending EMERGENCY exit to WORKER #{pid}"
+						node.log "sending EMERGENCY exit to WORKER #{pid}"
 						worker.emit 'exit'
 				# SIGHUP just restarts workers, SIGQUIT gracefully restarts workers
 				process.exit() unless signal in ['exit', 'SIGHUP', 'SIGQUIT']
@@ -393,13 +396,13 @@ module.exports = (handler, options = {}) ->
 			if options.repl is true
 				process.stdin.on 'close', process.exit
 				REPL()
-				process.log "REPL running in the console. Use CTRL+C to stop."
+				node.log "REPL running in the console. Use CTRL+C to stop."
 			else
 				net.createServer(REPL).listen options.repl
 				if _.isNumber options.repl
-					process.log "REPL running on 127.0.0.1:#{options.repl}. Use CTRL+C to stop."
+					node.log "REPL running on 127.0.0.1:#{options.repl}. Use CTRL+C to stop."
 				else
-					process.log "REPL running on #{options.repl}. Use CTRL+C to stop."
+					node.log "REPL running on #{options.repl}. Use CTRL+C to stop."
 
 		#
 		# setup watchdog, to reload modified source files
@@ -410,18 +413,15 @@ module.exports = (handler, options = {}) ->
 		#
 		if options.watch
 			watch = options.watch.join(' ')
-			#cmd = "find #{watch} -name '*.js' -o -name '*.coffee'"
-			cmd = "find #{watch}"
-			require('child_process').exec cmd, (err, out) ->
+			cmd = "find #{watch} -name '*.js' -o -name '*.coffee'"
+			require('child_process').exec cmd, (error, out) ->
 				restarting = false
 				files = out.trim().split '\n'
-				process.log err, "WATCH?: #{files}"
 				files.forEach (file) ->
-					process.log "WATCH: #{file}"
 					fs.watchFile file, {interval: options.watch or 100}, (curr, prev) ->
 						return if restarting
 						if curr.mtime > prev.mtime
-							process.log "#{file} has changed, respawning"
+							node.log "#{file} has changed, respawning"
 							restarting = true
 							process.kill process.pid, 'SIGQUIT'
 							restarting = false
@@ -430,7 +430,7 @@ module.exports = (handler, options = {}) ->
 		# uncaught exceptions cause workers respawn
 		#
 		process.on 'uncaughtException', (err) ->
-			process.log "EXCEPTION: #{err.stack or err.message}"
+			node.log "EXCEPTION: #{err.stack or err.message}"
 			process.kill process.pid, 'SIGHUP'
 
 	#

@@ -38,7 +38,7 @@
 
 fs = require 'fs'
 http = require 'http'
-lookupMimeType = require('mime') 'application/octet-stream'
+lookupMimeType = require('simple-mime') 'application/octet-stream'
 
 http.ServerResponse::send = (body, headers, status) ->
 

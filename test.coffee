@@ -32,8 +32,9 @@ config =
 		pubsub:
 			ping: (channel, message) ->
 				console.error 'PING', @id, channel, message
-		watch: [__filename]
-		#websocket: true
+		watch: [__filename, 'test', 'src']
+		shutdownTimeout: 10000
+		websocket: true
 		ipc: '.ipc'
 
 	security:
@@ -216,9 +217,12 @@ All {},
 			simple.handlers.mount 'POST', '/foo', (req, res, next) ->
 				res.send 'POSTED TO FOO'
 
-			simple.handlers.static_
-				dir: config.server.pub.dir
-				ttl: config.server.pub.ttl
+			#simple.handlers.static_
+			#	dir: config.server.pub.dir
+			#	ttl: config.server.pub.ttl
+
+			require('./node_modules/stack.static') config.server.pub.dir,
+				default: 'index.html'
 
 		)
 

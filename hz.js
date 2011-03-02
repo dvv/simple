@@ -1,3 +1,4 @@
+console.log(process.mainModule.paths);
 var net = require('net');
 
 var socketPath = '.ipc';

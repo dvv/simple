@@ -91,7 +91,7 @@ class Cookie
 module.exports = Cookie
 
 ###
-_ = require '../node_modules/underscore'
+_ = require 'underscore'
 
 req = {}
 res = {}

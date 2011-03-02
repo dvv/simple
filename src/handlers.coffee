@@ -388,7 +388,7 @@ module.exports.static_ = (options = {}) ->
 		# serve files
 		# no static file? -> none of our business
 		if req.method is 'GET'
-			console.log 'STATIC?', req.url
+			#console.log 'STATIC?', req.url
 			#if options.honorType and req.context?.user?.type
 			#	req.url = '/' + req.context.user.type + req.url
 			#console.log 'STATIC!', req.url
