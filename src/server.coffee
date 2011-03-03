@@ -33,7 +33,7 @@
 ###
 
 #
-# borrowed from 'cluster'.
+# thanks 'LearnBoost/cluster'
 # takes chunks in buffer. when the buffer contains valid JSON literal
 # reset the buffer and emit 'message' event passing parsed JSON as parameter
 #
@@ -369,8 +369,7 @@ module.exports = (handler, options = {}) ->
 						# remove workers
 						else if n < 0
 							# adjust max workers count
-							nworkers += n
-							nworkers = 0 if nworkers < 0
+							nworkers = Math.max(0, nworkers + n)
 							# shutdown all workers, spawn at most nworkers
 							process.kill process.pid, 'SIGQUIT'
 						return
@@ -378,7 +377,7 @@ module.exports = (handler, options = {}) ->
 						console.log process.memoryUsage()
 					status: () ->
 						_.each workers, (worker, pid) ->
-							# taken from 'cluster'
+							# thanks 'LearnBoost/cluster'
 							try
 								process.kill pid, 0
 								status = 'alive'
@@ -388,6 +387,7 @@ module.exports = (handler, options = {}) ->
 								else
 									throw err
 							console.log "STATUS for #{pid} is #{status}"
+						return
 
 			#
 			# start REPL

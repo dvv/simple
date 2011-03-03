@@ -383,6 +383,40 @@ module.exports.static = (options = {}) ->
 	require('stack.static') options.root, options
 
 #
+# serve dynamic content based on template files using options.map
+#
+module.exports.dynamic = (options = {}) ->
+
+	fs = require 'fs'
+
+	tmplSyntax = options.syntax or {
+		evaluate    : /\{\{([\s\S]+?)\}\}/g
+		interpolate : /\$\{([\s\S]+?)\}/g
+	}
+
+	cache = {}
+
+	handler = (req, res, next) ->
+
+		#console.log 'DYNAMIC?', req
+		if req.method is 'GET' and file = options.map[req.location.pathname]
+			if cache.hasOwnProperty file
+				# TODO: disable caching
+				# TODO: Content-Length:?
+				#console.log 'CACHE', cache[file]
+				res.send cache[file] req.context
+			else
+				fs.readFile file, (err, html) ->
+					return next err if err
+					cache[file] = _.template html.toString('utf8'), null, tmplSyntax
+					handler req, res, next
+					return
+		else
+			next()
+		return
+
+
+#
 # various helpers
 #
 module.exports.helpers =

@@ -188,12 +188,10 @@ All {},
 			simple.handlers.mount 'GET', '/foo0', (req, res, next) ->
 				res.send 'GOT FROM HOME'
 
-			simple.handlers.static
-				root: config.server.pub.dir
-				default: 'index.html'
-				#cacheMaxFileSizeToCache: 1024 # set to limit the size of cacheable file
-				cacheTTL: 1000
-				process: simple.handlers.helpers.template()
+			simple.handlers.authCookie
+				cookie: 'uid'
+				secret: config.security.secret
+				getContext: app.getContext
 
 			simple.handlers.mount 'GET', '/foo1', (req, res, next) ->
 				res.send 'GOT FROM HOME'
@@ -202,15 +200,21 @@ All {},
 			#	get: (req, res, next) -> res.send 'GOT FROM HOME'
 			#	post: (req, res, next) -> res.send 'POSTFOO1'
 
+			simple.handlers.dynamic
+				map:
+					'/': 'test/index.html'
+
 			simple.handlers.mount 'GET', '/foo2', (req, res, next) ->
 				res.send 'GOT FROM HOME'
 
-			simple.handlers.authCookie
-				cookie: 'uid'
-				secret: config.security.secret
-				getContext: app.getContext
+			simple.handlers.static
+				root: config.server.pub.dir
+				default: 'index.html'
+				#cacheMaxFileSizeToCache: 1024 # set to limit the size of cacheable file
+				cacheTTL: 1000
+				process: simple.handlers.helpers.template()
 
-			simple.handlers.mount 'GET', '/home', (req, res, next) ->
+			simple.handlers.mount 'GET', '/foo3', (req, res, next) ->
 				res.send 'GOT FROM HOME'
 
 			simple.handlers.mount 'GET', '/course', (req, res, next) ->
@@ -235,17 +239,11 @@ All {},
 			simple.handlers.mount 'GET', '/a6000', (req, res, next) ->
 				res.send TESTSTR6000
 
-			simple.handlers.mount 'GET', '/foo3', (req, res, next) ->
+			simple.handlers.mount 'GET', '/foo4', (req, res, next) ->
 				res.send 'GOT FROM HOME'
 
 			simple.handlers.mount 'POST', '/foo', (req, res, next) ->
 				res.send 'POSTED TO FOO'
-
-			#simple.handlers.dynamic
-			#	map:
-			#		'/chrome': 'test/index.html'
-			#	root: config.server.pub.dir
-			#	default: 'index.html'
 
 		)
 
