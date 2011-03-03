@@ -182,15 +182,25 @@ All {},
 		#
 		handler = simple.stack(
 
-			#require('./node_modules/stack.static') config.server.pub.dir,
-			#	default: 'index.html'
-
 			simple.handlers.jsonBody
 				maxLength: 0 # set to >0 to limit the number of bytes
 
-			simple.handlers.mount '/foo1',
-				get: (req, res, next) -> res.send 'GOT FROM HOME'
-				post: (req, res, next) -> res.send 'POSTFOO1'
+			simple.handlers.mount 'GET', '/foo0', (req, res, next) ->
+				res.send 'GOT FROM HOME'
+
+			simple.handlers.static
+				root: config.server.pub.dir
+				default: 'index.html'
+				#cacheMaxFileSizeToCache: 1024 # set to limit the size of cacheable file
+				cacheTTL: 1000
+				process: simple.handlers.helpers.template()
+
+			simple.handlers.mount 'GET', '/foo1', (req, res, next) ->
+				res.send 'GOT FROM HOME'
+
+			#simple.handlers.mount '/foo1',
+			#	get: (req, res, next) -> res.send 'GOT FROM HOME'
+			#	post: (req, res, next) -> res.send 'POSTFOO1'
 
 			simple.handlers.mount 'GET', '/foo2', (req, res, next) ->
 				res.send 'GOT FROM HOME'
@@ -231,9 +241,11 @@ All {},
 			simple.handlers.mount 'POST', '/foo', (req, res, next) ->
 				res.send 'POSTED TO FOO'
 
-			simple.handlers.dynamic
-				map:
-					'/chrome': 'test/index.html'
+			#simple.handlers.dynamic
+			#	map:
+			#		'/chrome': 'test/index.html'
+			#	root: config.server.pub.dir
+			#	default: 'index.html'
 
 		)
 

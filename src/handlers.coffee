@@ -372,31 +372,31 @@ _.mixin
 ###
 
 
-module.exports.dynamic = (options = {}) ->
+#
+# serve pure static content from options.root
+#
+module.exports.static = (options = {}) ->
 
-	fs = require 'fs'
+	options.root ?= 'public'
+	options.default ?= 'index.html'
 
-	tmplSyntax = options.syntax or {
-		evaluate    : /\{\{([\s\S]+?)\}\}/g
-		interpolate : /\{\{=([\s\S]+?)\}\}/g
-	}
+	require('stack.static') options.root, options
 
-	#
-	# dynamic pages cache
-	# TODO: how to reset?
-	#
-	cache = {}
+#
+# various helpers
+#
+module.exports.helpers =
 
-	handler = (req, res, next) ->
-
-		#console.log 'STATIC?', req
-		if req.method is 'GET' and file = options.map[req.location.pathname]
-			if cache[file]
-				res.send cache[file] req.context
-			else
-				fs.readFile file, (err, html) ->
-					return next err if err
-					cache[file] = _.template html.toString('utf8'), null, tmplSyntax
-					res.send cache[file] req.context
-		else
-			next()
+	template: (options = {}) ->
+		tmplSyntax = options.syntax or {
+			evaluate    : /\{\{([\s\S]+?)\}\}/g
+			interpolate : /\$\{([\s\S]+?)\}/g
+		}
+		types = options.extensions or {
+			'.html': (data) -> _.template data.toString('utf8'), null, tmplSyntax
+		}
+		(data, name) ->
+			for ext, fn of types
+				if name.slice(-ext.length) is ext
+					return fn data
+			data

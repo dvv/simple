@@ -374,6 +374,8 @@ module.exports = (handler, options = {}) ->
 							# shutdown all workers, spawn at most nworkers
 							process.kill process.pid, 'SIGQUIT'
 						return
+					mem: () ->
+						console.log process.memoryUsage()
 					status: () ->
 						_.each workers, (worker, pid) ->
 							# taken from 'cluster'
