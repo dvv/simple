@@ -415,6 +415,24 @@ module.exports.dynamic = (options = {}) ->
 			next()
 		return
 
+#
+# serve websocket requests
+#
+module.exports.websocket = (server, options = {}) ->
+
+	#
+	# upgrade vanilla HTTP(S) server
+	#
+	require('ws').configureServer server
+
+	handler = (req, res, next) ->
+		if ws = res.webSocket
+			#console.log 'WS', ws
+			ws.on 'message', options.onmessage
+			ws.connect()
+		else
+			next()
+
 
 #
 # various helpers

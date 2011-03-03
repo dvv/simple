@@ -54,7 +54,7 @@ framing = (chunk) ->
 #
 # node cluster factory, takes request handler and configuration
 #
-module.exports = (handler, options = {}) ->
+module.exports = (app, options = {}) ->
 
 	net = require 'net'
 	fs = require 'fs'
@@ -87,9 +87,12 @@ module.exports = (handler, options = {}) ->
 				key: fs.readFileSync options.sslKey, 'utf8'
 				cert: fs.readFileSync options.sslCert, 'utf8'
 				#ca: options.sslCACerts.map (fname) -> fs.readFileSync fname, 'utf8'
-			server = require('https').createServer credentials, handler
+			server = require('https').createServer credentials
 		else
-			server = require('http').createServer handler
+			server = require('http').createServer()
+		# attach request handler
+		# N.B. such pervert way of defining handler is due to handler factory should have reference to the server!
+		server.on 'request', app.getHandler server
 
 		#
 		# add websocket handler

@@ -94,6 +94,9 @@ require './request'
 #
 require './response'
 
+#
+# expose interface
+#
 module.exports =
 	Database: require './database'
 	run: require './server'

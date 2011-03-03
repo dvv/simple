@@ -162,25 +162,17 @@ All {},
 			Course: RestrictiveFacet model.Course
 
 		#
-		# app should provide for .getContext(uid, next) -- the method to retrieve
-		#   capability object for given user uid
+		# define capability object for given user uid
 		#
-		app = Object.freeze
-			getContext: (uid, next) ->
-				context = _.extend.apply null, [{}, facet]
-				# FIXME: _.freeze is very consuming!
-				next? null, _.freeze context
-		next null, app
-
-	#
-	# define server
-	#
-	(err, app, next) ->
+		getContext = (uid, next) ->
+			context = _.extend.apply null, [{}, facet]
+			# FIXME: _.freeze is very consuming!
+			next? null, _.freeze context
 
 		#
 		# define middleware stack
 		#
-		handler = simple.stack(
+		getHandler = (server) -> simple.stack(
 
 			simple.handlers.jsonBody
 				maxLength: 0 # set to >0 to limit the number of bytes
@@ -188,10 +180,13 @@ All {},
 			simple.handlers.mount 'GET', '/foo0', (req, res, next) ->
 				res.send 'GOT FROM HOME'
 
+			simple.handlers.websocket server,
+				onmessage: app.onmessage
+
 			simple.handlers.authCookie
 				cookie: 'uid'
 				secret: config.security.secret
-				getContext: app.getContext
+				getContext: getContext
 
 			simple.handlers.mount 'GET', '/foo1', (req, res, next) ->
 				res.send 'GOT FROM HOME'
@@ -248,9 +243,19 @@ All {},
 		)
 
 		#
+		# compose application
+		#
+		app = Object.freeze
+			#getContext: getContext
+			getHandler: getHandler
+			onmessage: (body) ->
+				process.log 'MESSAGE: "' + body.toString('utf8') + '"'
+				@sendTextMessage body
+
+		#
 		# run the application
 		#
-		simple.run handler, config.server
+		simple.run app, config.server
 
 	#
 	# define fallback

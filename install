@@ -10,6 +10,7 @@ christkv/node-mongodb-native:mongodb
 cloudhead/eyes.js/lib/eyes.js:eyes.js
 tautologistics/node-htmlparser/lib/htmlparser.js:htmlparser.js
 LearnBoost/Socket.IO-node:io
+stellaeof/node-websocket-handler:ws
 #
 #edtsech/underscore.string/lib/underscore.string.js:underscore.string.js
 #
