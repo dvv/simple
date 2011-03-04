@@ -14,7 +14,11 @@
   <script type="text/javascript" src="schema.js"></script>
   <script type="text/javascript" src="rql.js"></script>
   <!--script type="text/javascript" src="http://www.geonames.org/postalCodeLookupJSON?postalcode=17000&callback=testSchema"></script-->
-  <script>var chrome='${123}';</script>
+  <script>
+  var chrome='${123}';
+  var cid = "$${'<foo></foo>'}";
+  var cid1 = "${'<foo></foo>'}";
+  </script>
 </head>
 <body>
   <h1 id="qunit-header">Simple Test Suite</h1>

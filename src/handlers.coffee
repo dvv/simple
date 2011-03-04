@@ -389,9 +389,14 @@ module.exports.dynamic = (options = {}) ->
 
 	fs = require 'fs'
 
+	escapeHTML = (x) ->
+		return '' if x == null
+		String(x).replace(/&(?!\w+;|#\d+;|#x[\da-f]+;)/gi, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
 	tmplSyntax = options.syntax or {
 		evaluate    : /\{\{([\s\S]+?)\}\}/g
-		interpolate : /\$\{([\s\S]+?)\}/g
+		interpolate : /\$\$\{([\s\S]+?)\}/g
+		escape      : /\$\{([\s\S]+?)\}/g
 	}
 
 	cache = {}
@@ -418,7 +423,7 @@ module.exports.dynamic = (options = {}) ->
 #
 # serve websocket requests
 #
-module.exports.websocket = (server, options = {}) ->
+module.exports.websocket0 = (server, options = {}) ->
 
 	#
 	# upgrade vanilla HTTP(S) server
@@ -432,6 +437,23 @@ module.exports.websocket = (server, options = {}) ->
 			ws.connect()
 		else
 			next()
+
+
+#
+# serve websocket requests
+#
+module.exports.websocket = (server, options = {}) ->
+
+	websocket = require('io').listen server,
+		#resource: 'ws'
+		flashPolicyServer: false
+		#transports: ['websocket', 'flashsocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
+		transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
+		#transportOptions:
+		#	websocket:
+		#		foo: 'bar'
+
+	websocket.on 'connection', options.connection
 
 
 #

@@ -91,33 +91,18 @@ module.exports = (app, options = {}) ->
 		else
 			server = require('http').createServer()
 		# attach request handler
-		# N.B. such pervert way of defining handler is due to handler factory should have reference to the server!
+		# N.B. such pervert way of defining handler is for handler factory to have reference to the server!
 		server.on 'request', app.getHandler server
 
-		#
-		# add websocket handler
-		#
-		if options.websocket
-			websocket = require('io').listen server,
-				#resource: 'ws'
-				flashPolicyServer: false
-				transports: ['websocket', 'flashsocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
-				#transportOptions:
-				#	websocket:
-				#		foo: 'bar'
-			websocket.on 'connection', (client) ->
-				client.broadcast
-					announcement: client.sessionId + ' connected'
-				client.on 'message', (message) ->
-					msg =
-						message: [client.sessionId, message]
-					process.log "WEBMESSAGE", msg
-					client.send
-						foo: 'bar'
-					client.broadcast msg
-				client.on 'disconnect', () ->
-					client.broadcast
-						announcement: client.sessionId + ' disconnected'
+		websocket = require('io').listen server,
+			#resource: 'ws'
+			flashPolicyServer: false
+			#transports: ['websocket', 'flashsocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
+			transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
+			#transportOptions:
+			#	websocket:
+			#		foo: 'bar'
+		websocket.on 'connection', options.websocket
 
 		#
 		# setup signals
@@ -196,12 +181,12 @@ module.exports = (app, options = {}) ->
 		#
 		# define message publisher
 		#
-		process.publish = (channel, data) ->
-			msg =
+		process.publish = (channel, message) ->
+			data =
 				from: @pid
 				channel: channel
-				data: data
-			comm.write JSON.stringify msg
+				data: message
+			comm.write JSON.stringify data
 
 		#
 		# keep-alive?

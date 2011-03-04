@@ -23,8 +23,8 @@ config =
 		#uid: 65534
 		#gid: 65534
 		#pwd: './secured-root'
-		#sslKey: 'key.pem'
-		#sslCert: 'cert.pem'
+		#sslKey: '../simple-example/key.pem'
+		#sslCert: '../simple-example/cert.pem'
 		repl: true #30000
 		pub:
 			dir: 'test'
@@ -35,7 +35,21 @@ config =
 				console.error 'PING', @id, channel, message
 		watch: [__filename, 'test', 'src']
 		shutdownTimeout: 10000
-		#websocket: true
+		websocket: (client) ->
+					process.log "WEBENTER", client.sessionId
+					#client.broadcast
+					#	announcement: client.sessionId + ' connected'
+					client.on 'message', (message) ->
+						msg =
+							message: [client.sessionId, message]
+						process.log "WEBMESSAGE", msg
+						#client.send
+						#	foo: 'bar'
+						#client.broadcast msg
+					client.on 'disconnect', () ->
+						process.log "WEBLEAVE", client.sessionId
+						#client.broadcast
+						#	announcement: client.sessionId + ' disconnected'
 		ipc: '.ipc'
 
 	security:
@@ -180,8 +194,8 @@ All {},
 			simple.handlers.mount 'GET', '/foo0', (req, res, next) ->
 				res.send 'GOT FROM HOME'
 
-			simple.handlers.websocket server,
-				onmessage: app.onmessage
+			#simple.handlers.websocket server,
+			#	onmessage: app.onmessage
 
 			simple.handlers.authCookie
 				cookie: 'uid'
