@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head>
+<script type="text/javascript" src="jquery-1.5.1.min.js"></script>
+<script type="text/javascript" src="jquery.gracefulWebSocket.js"></script>
+<!--script type="text/javascript" src="http://code.jquery.com/jquery-1.5.1.min.js"></script>
+<script type="text/javascript" src="http://jquery-graceful-websocket.googlecode.com/files/jquery.gracefulWebSocket.js"></script-->
+</head>
+<body>
+<script>
+var ws = $.gracefulWebSocket("ws://localhost:3000");
+ws.onmessage = function (event) {
+	var messageFromServer = event.data;
+	console.log('FROM', event);
+};
+ws.send("message to server");
+</script>
+</body>
+</html>

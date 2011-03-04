@@ -194,8 +194,8 @@ All {},
 			simple.handlers.mount 'GET', '/foo0', (req, res, next) ->
 				res.send 'GOT FROM HOME'
 
-			#simple.handlers.websocket server,
-			#	onmessage: app.onmessage
+			simple.handlers.websocket0 server,
+				onmessage: app.onmessage
 
 			simple.handlers.authCookie
 				cookie: 'uid'

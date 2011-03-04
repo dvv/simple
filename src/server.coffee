@@ -94,6 +94,7 @@ module.exports = (app, options = {}) ->
 		# N.B. such pervert way of defining handler is for handler factory to have reference to the server!
 		server.on 'request', app.getHandler server
 
+		###
 		websocket = require('io').listen server,
 			#resource: 'ws'
 			flashPolicyServer: false
@@ -103,6 +104,7 @@ module.exports = (app, options = {}) ->
 			#	websocket:
 			#		foo: 'bar'
 		websocket.on 'connection', options.websocket
+		###
 
 		#
 		# setup signals
