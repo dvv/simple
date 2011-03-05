@@ -76,7 +76,7 @@ module.exports = (app, options = {}) ->
 		# define logger
 		#
 		process.log = (args...) ->
-			args[0] = "WORKER #{process.pid}: " + args[0]
+			args[0] = "#{Date.now()} WORKER #{process.pid}: " + args[0]
 			console.error.apply console, args
 
 		#
@@ -89,22 +89,23 @@ module.exports = (app, options = {}) ->
 				#ca: options.sslCACerts.map (fname) -> fs.readFileSync fname, 'utf8'
 			server = require('https').createServer credentials
 		else
+			#server = if options.websocket then require('ws0/ws/server').createServer(debug: true) else require('http').createServer()
 			server = require('http').createServer()
+			
 		# attach request handler
 		# N.B. such pervert way of defining handler is for handler factory to have reference to the server!
 		server.on 'request', app.getHandler server
 
-		###
-		websocket = require('io').listen server,
-			#resource: 'ws'
-			flashPolicyServer: false
-			#transports: ['websocket', 'flashsocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
-			transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
-			#transportOptions:
-			#	websocket:
-			#		foo: 'bar'
-		websocket.on 'connection', options.websocket
-		###
+		if options.websocket
+			websocket = require('io').listen server,
+				#resource: 'ws'
+				flashPolicyServer: false
+				#transports: ['websocket', 'flashsocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
+				transports: ['websocket', 'xhr-polling'] #, 'htmlfile']
+				#transportOptions:
+				#	websocket:
+				#		foo: 'bar'
+			websocket.on 'connection', options.websocket
 
 		#
 		# setup signals
@@ -158,12 +159,18 @@ module.exports = (app, options = {}) ->
 		#
 		comm.on 'message', (data) ->
 			# skip self-emitted messages
-			return if data.from is process.pid
+			# FIXME: what if the only worker?!
+			process.log "MSGFROM #{data.from}"
+			#return if data.from is process.pid
 			# pubsub
 			# TODO: channel pattern match?
 			if options.pubsub
 				options.pubsub[data.channel]?.call process, data.channel, data.data
 				options.pubsub.all?.call process, data.channel, data.data
+				# broadcast to websocket clients
+				if data.channel is 'bcast' and websocket
+					process.log 'BCAST'
+					websocket.broadcast data.data
 
 		#
 		# master socket has arrived
@@ -193,7 +200,7 @@ module.exports = (app, options = {}) ->
 		#
 		# keep-alive?
 		#
-		#setInterval (() -> process.publish 'ping'), 2000
+		setInterval (() -> process.publish 'bcast', foo: 'bar'), 3000
 
 	####################################################################
 	#
@@ -252,7 +259,9 @@ module.exports = (app, options = {}) ->
 				from: null # master
 				channel: channel
 				data: message
-			_.each workers, (worker) -> worker.write data
+			for pid, worker of workers
+				worker.write data
+			return
 
 		#
 		# create IPC server
@@ -280,7 +289,7 @@ module.exports = (app, options = {}) ->
 			stream.on 'data', framing.bind stream
 
 			#
-			# message from the worker
+			# message from a worker
 			#
 			stream.on 'message', (data) ->
 				#process.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
@@ -294,7 +303,9 @@ module.exports = (app, options = {}) ->
 			#
 			stream.on 'end', () ->
 				# unregister gone worker
-				workers = _.without workers, stream
+				for pid, worker of workers
+					if worker is stream
+						delete workers[pid]
 				# start new worker
 				spawnWorker() if nworkers > _.size workers
 
@@ -313,7 +324,7 @@ module.exports = (app, options = {}) ->
 			process.on signal, () ->
 				@log "signalled #{signal}"
 				# relay signal to all workers
-				_.each workers, (worker, pid) ->
+				for pid, worker of workers
 					try
 						process.log "sending #{signal} to WORKER #{pid}"
 						process.kill pid, signal

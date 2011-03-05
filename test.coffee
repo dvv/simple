@@ -32,7 +32,7 @@ config =
 		stackTrace: true
 		pubsub:
 			ping: (channel, message) ->
-				console.error 'PING', @id, channel, message
+				console.error 'PING', @pid, channel, message
 		watch: [__filename, 'test', 'src']
 		shutdownTimeout: 10000
 		websocket: (client) ->
@@ -194,8 +194,8 @@ All {},
 			simple.handlers.mount 'GET', '/foo0', (req, res, next) ->
 				res.send 'GOT FROM HOME'
 
-			simple.handlers.websocket0 server,
-				onmessage: app.onmessage
+			#simple.handlers.websocket0 server,
+			#	onmessage: app.onmessage
 
 			simple.handlers.authCookie
 				cookie: 'uid'
@@ -264,7 +264,7 @@ All {},
 			getHandler: getHandler
 			onmessage: (body) ->
 				process.log 'MESSAGE: "' + body.toString('utf8') + '"'
-				@sendTextMessage body
+				@sendTextMessage "MESSAGE to #{@pid}: \"" + body.toString('utf8') + '"'
 
 		#
 		# run the application

@@ -438,13 +438,29 @@ module.exports.websocket0 = (server, options = {}) ->
 		else
 			next()
 
+#
+# serve websocket requests
+#
+module.exports.websocket1 = (server, options = {}) ->
+
+	websocket = require('io').listen server,
+		#resource: 'ws'
+		flashPolicyServer: false
+		#transports: ['websocket', 'flashsocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
+		transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
+		#transportOptions:
+		#	websocket:
+		#		foo: 'bar'
+
+	websocket.on 'connection', options.connection
+
 
 #
 # serve websocket requests
 #
 module.exports.websocket = (server, options = {}) ->
 
-	websocket = require('io').listen server,
+	websocket = require('ws0/ws/server').listen server,
 		#resource: 'ws'
 		flashPolicyServer: false
 		#transports: ['websocket', 'flashsocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
