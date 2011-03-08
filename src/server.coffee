@@ -150,7 +150,7 @@ module.exports = (app, options = {}) ->
 			#process.publish 'connect'
 
 		#
-		# wait for complete JSON object to come, parse it and emit 'message' event
+		# wait for complete JSON message to come, parse it and emit 'message' event
 		#
 		comm.on 'data', framing.bind comm
 
@@ -165,7 +165,8 @@ module.exports = (app, options = {}) ->
 			# pubsub
 			# TODO: channel pattern match?
 			if options.pubsub
-				options.pubsub[data.channel]?.call process, data.channel, data.data
+				if options.pubsub.hasOwnProperty data.channel
+					options.pubsub[data.channel].call process, data.channel, data.data
 				options.pubsub.all?.call process, data.channel, data.data
 				# broadcast to websocket clients
 				if data.channel is 'bcast' and websocket
@@ -173,7 +174,7 @@ module.exports = (app, options = {}) ->
 					websocket.broadcast data.data
 
 		#
-		# master socket has arrived
+		# master socket descriptor has arrived
 		#
 		comm.once 'fd', (fd) ->
 			# listen to the master socket
@@ -185,7 +186,7 @@ module.exports = (app, options = {}) ->
 		# master has gone -> exit
 		#
 		comm.once 'end', () ->
-			process.exit 0
+			process.exit()
 
 		#
 		# define message publisher
@@ -200,7 +201,7 @@ module.exports = (app, options = {}) ->
 		#
 		# keep-alive?
 		#
-		setInterval (() -> process.publish 'bcast', foo: 'bar'), 3000
+		setInterval (() -> process.publish 'bcast', foo: 'bar'), 10000
 
 	####################################################################
 	#
@@ -259,8 +260,7 @@ module.exports = (app, options = {}) ->
 				from: null # master
 				channel: channel
 				data: message
-			for pid, worker of workers
-				worker.write data
+			worker.write data for pid, worker of workers
 			return
 
 		#
@@ -281,7 +281,7 @@ module.exports = (app, options = {}) ->
 			#
 			# relay raw data to all known workers
 			#
-			stream.on 'data', (data) -> _.each workers, (worker) -> worker.write data
+			#stream.on 'data', (data) -> _.each workers, (worker) -> worker.write data
 
 			#
 			# wait for complete JSON object to come, parse it and emit 'message' event
@@ -294,9 +294,13 @@ module.exports = (app, options = {}) ->
 			stream.on 'message', (data) ->
 				#process.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
 				# register new worker
-				if data.channel is 'register'
+				if data.channel is 'bcast'
+					data = JSON.stringify data
+					worker.write data for pid, worker of workers
+				else if data.channel is 'register'
 					workers[data.from] = stream
 					process.log "WORKER #{data.from} started and listening to *:#{options.port}"
+				return
 
 			#
 			# worker has gone

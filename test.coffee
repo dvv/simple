@@ -19,7 +19,7 @@ config =
 	server:
 
 		port: 3000
-		#workers: 3
+		workers: 1
 		#uid: 65534
 		#gid: 65534
 		#pwd: './secured-root'
