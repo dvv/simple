@@ -421,6 +421,27 @@ module.exports.dynamic = (options = {}) ->
 		return
 
 #
+# get what we can from remote ip and browser info
+#
+module.exports.getRemoteUserInfo = (options = {}) ->
+
+	getLocation = require('simple-geoip')(options.fileName).lookupByIP
+	useragent = require 'useragent'
+
+	handler = (req, res, next) ->
+		ip = req.connection.remoteAddress
+		agent = req.headers['user-agent'] or ''
+		req.info =
+			ip: ip
+			geo: getLocation(ip, true)
+			agent: useragent.parser agent
+			browser: useragent.browser agent
+			nls: req.headers['accept-language']?.replace(/[,;].*$/, '').toLowerCase() or 'en-us'
+		#console.log req.info
+		next()
+		return
+
+#
 # serve websocket requests
 #
 module.exports.websocket0 = (server, options = {}) ->

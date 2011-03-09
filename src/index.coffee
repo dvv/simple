@@ -79,9 +79,9 @@ global.All = (context, steps...) ->
 # expose Object helpers
 #
 global._ = require 'underscore'
-require './database/object'
-require './database/validate'
-require './database/rql'
+require './object'
+require './validate'
+require './rql'
 Object.freeze _
 
 #

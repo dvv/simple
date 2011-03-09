@@ -30,12 +30,6 @@ config =
 			dir: 'test'
 			ttl: 3600
 		stackTrace: true
-		pubsub:
-			ping: (channel, message) ->
-				console.error 'PING', @pid, channel, message
-			bcast: (broadcaster, message) ->
-				console.error 'BCAST!', message
-				broadcaster message
 		watch: [__filename, 'test', 'src']
 		shutdownTimeout: 10000
 		websocket: (client) ->
@@ -197,6 +191,11 @@ All {},
 			simple.handlers.mount 'GET', '/foo0', (req, res, next) ->
 				res.send 'GOT FROM HOME'
 
+			simple.handlers.getRemoteUserInfo()
+
+			simple.handlers.mount 'GET', '/foo00', (req, res, next) ->
+				res.send 'GOT FROM HOME'
+
 			#simple.handlers.websocket0 server,
 			#	onmessage: app.onmessage
 
@@ -265,9 +264,6 @@ All {},
 		app = Object.freeze
 			#getContext: getContext
 			getHandler: getHandler
-			#onmessage: (body) ->
-			#	process.log 'MESSAGE: "' + body.toString('utf8') + '"'
-			#	@sendTextMessage "MESSAGE to #{@pid}: \"" + body.toString('utf8') + '"'
 			messageHandler: (broadcaster, message) -> # @ === worker
 				if message.channel is 'bcast'
 					console.error 'BCAST!', message

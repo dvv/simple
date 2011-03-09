@@ -3,9 +3,10 @@ exec >>log 2>&1
 
 URL=Course
 URL=Geo
+URL=foo00
 
 ab -n10000 -c100 http://localhost:3000/$URL
-ab -n10000 -c100 http://localhost:3000/$URL
-ab -n10000 -c100 http://localhost:3000/$URL
-ab -n10000 -c100 http://localhost:3000/$URL
-ab -n10000 -c100 http://localhost:3000/$URL
+#ab -n10000 -c100 http://localhost:3000/$URL
+#ab -n10000 -c100 http://localhost:3000/$URL
+#ab -n10000 -c100 http://localhost:3000/$URL
+#ab -n10000 -c100 http://localhost:3000/$URL

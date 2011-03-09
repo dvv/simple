@@ -40,6 +40,8 @@ http = require 'http'
 parseUrl = require('url').parse
 path = require 'path'
 
+REGEXP_IP = /^\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}$/
+
 http.IncomingMessage::parse = () ->
 
 	# parse URL
@@ -51,8 +53,8 @@ http.IncomingMessage::parse = () ->
 
 	# real remote IP (e.g. if nginx or haproxy as a reverse-proxy is used)
 	# FIXME: easily spoofed!
-	if @headers['x-forwarded-for']
-		@socket.remoteAddress = @headers['x-forwarded-for']
+	if s = @headers['x-forwarded-for']
+		@socket.remoteAddress = s if REGEXP_IP.test s
 		delete @headers['x-forwarded-for']
 
 	# honor X-HTTP-Method-Override

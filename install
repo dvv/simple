@@ -5,13 +5,15 @@ documentcloud/underscore/underscore.js:underscore.js
 creationix/stack/stack.js:stack.js
 dvv/stack.static/src/index.coffee:stack.static.coffee
 creationix/simple-mime/simple-mime.js:simple-mime.js
+dvv/simple-geoip/lib:simple-geoip
+3rd-Eden/node-useragent/useragent.js:useragent.js
 christkv/node-mongodb-native:mongodb
 #bnoguchi/redis-node:redis
 cloudhead/eyes.js/lib/eyes.js:eyes.js
 tautologistics/node-htmlparser/lib/htmlparser.js:htmlparser.js
 LearnBoost/Socket.IO-node:io
 #stellaeof/node-websocket-handler:ws
-nicokaiser/node-websocket-server/lib:ws0
+#nicokaiser/node-websocket-server/lib:ws0
 #
 #edtsech/underscore.string/lib/underscore.string.js:underscore.string.js
 #
@@ -42,7 +44,7 @@ for dep in $deps; do
 	if ! test -d git/${git}; then
 		#git clone https://github.com/${author}/${git}.git git/${git}
 		mkdir -p git/${git}
-		wget -ct3 -q --progress=bar --no-check-certificate http://nodeload.github.com/${author}/${git}/tarball/master -O- | tar -xzf- --strip 1 -C git/${git}
+		wget -ct3 --progress=bar --no-check-certificate http://nodeload.github.com/${author}/${git}/tarball/master -O- | tar -xzf- --strip 1 -C git/${git}
 		cd git/${git}
 		#if test -f Makefile; then
 		#	make
