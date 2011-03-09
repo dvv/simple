@@ -106,6 +106,7 @@ module.exports = (app, options = {}) ->
 				#	websocket:
 				#		foo: 'bar'
 			websocket.on 'connection', options.websocket
+			#broadcaster = websocket?.broadcast?.bind websocket
 
 		#
 		# setup signals
@@ -157,21 +158,20 @@ module.exports = (app, options = {}) ->
 		#
 		# message has arrived
 		#
-		comm.on 'message', (data) ->
+		comm.on 'message', app.messageHandler?.bind(process, (websocket?.broadcast?.bind websocket))
+		comm.on 'message1', (data) ->
 			# skip self-emitted messages
 			# FIXME: what if the only worker?!
 			process.log "MSGFROM #{data.from}"
 			#return if data.from is process.pid
 			# pubsub
 			# TODO: channel pattern match?
-			if options.pubsub
+			if _.isFunction options.pubsub
+				options.pubsub.call process, broadcaster, data.channel, data.data
+			else
 				if options.pubsub.hasOwnProperty data.channel
-					options.pubsub[data.channel].call process, data.channel, data.data
-				options.pubsub.all?.call process, data.channel, data.data
-				# broadcast to websocket clients
-				if data.channel is 'bcast' and websocket
-					process.log 'BCAST'
-					websocket.broadcast data.data
+					options.pubsub[data.channel].call process, broadcaster, data.data
+				options.pubsub.all?.call process, broadcaster, data.channel, data.data
 
 		#
 		# master socket descriptor has arrived
@@ -312,6 +312,7 @@ module.exports = (app, options = {}) ->
 						delete workers[pid]
 				# start new worker
 				spawnWorker() if nworkers > _.size workers
+				return
 
 		#
 		# start IPC server
