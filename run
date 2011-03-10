@@ -1,0 +1,4 @@
+#!/bin/sh
+#coffee -bc -o lib src/* && coffee -bc test.coffee && node test.js
+#coffee -bcw -o lib src/* &
+coffee -bc server.coffee && node server.js && rm server.js

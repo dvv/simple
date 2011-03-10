@@ -1,10 +1,9 @@
-#!/usr/local/bin/coffee
 'use strict'
 
-process.argv.shift() # still report 'node' as argv[0]
-require.paths.unshift './node_modules' # coffee counts from coffee-script binary so far
+#process.argv.shift() # still report 'node' as argv[0]
+#require.paths.unshift './node_modules' # coffee counts from coffee-script binary so far
 
-simple = require './src'
+simple = require './lib'
 
 sys = require 'util'
 console.log = (args...) ->
@@ -30,7 +29,7 @@ config =
 			dir: 'test'
 			ttl: 3600
 		stackTrace: true
-		watch: [__filename, 'test', 'src']
+		watch: [__filename, 'test', 'lib']
 		shutdownTimeout: 10000
 		websocket: (client) ->
 					process.log "WEBENTER", client.sessionId
@@ -191,13 +190,10 @@ All {},
 			simple.handlers.mount 'GET', '/foo0', (req, res, next) ->
 				res.send 'GOT FROM HOME'
 
-			simple.handlers.getRemoteUserInfo()
+			#simple.handlers.getRemoteUserInfo()
 
 			simple.handlers.mount 'GET', '/foo00', (req, res, next) ->
 				res.send 'GOT FROM HOME'
-
-			#simple.handlers.websocket0 server,
-			#	onmessage: app.onmessage
 
 			simple.handlers.authCookie
 				cookie: 'uid'
@@ -223,7 +219,7 @@ All {},
 				default: 'index.html'
 				#cacheMaxFileSizeToCache: 1024 # set to limit the size of cacheable file
 				cacheTTL: 1000
-				process: simple.handlers.helpers.template()
+				#process: simple.handlers.helpers.template()
 
 			simple.handlers.mount 'GET', '/foo3', (req, res, next) ->
 				res.send 'GOT FROM HOME'

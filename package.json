@@ -1,0 +1,14 @@
+{
+  "name"          : "simple",
+  "description"   : "Practical REST/JSON-RPC server with Object Capability",
+  "url"           : "https://github.com/dvv/simple/",
+  "keywords"      : ["json", "rpc", "json-rpc", "rest", "json-schema", "node.js", "capability", "mongodb", "javascript"],
+  "author"        : "Vladimir Dronnikov <dronnikov@gmail.com>",
+  "contributors"  : [],
+  "//dependencies"  : "many",
+  "dependencies"  : [],
+  "lib"           : "lib",
+  "main"          : "index.js",
+  "scripts"       : {"install": "./install"},
+  "version"       : "0.0.1"
+}

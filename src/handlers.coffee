@@ -101,8 +101,8 @@ module.exports.jsonBody = (options = {}) ->
 				try
 					# TODO: use kriszyp's more forgiving one?
 					req.params = JSON.parse body
-				catch x
-					req.params = x.message
+				catch err
+					req.params = err.message
 				next()
 		else
 			next()
@@ -163,7 +163,7 @@ module.exports.authCookie = (options = {}) ->
 			# get the user ID
 			# N.B. we use '' for all falsy uids
 			uid = req.cookie.get(cookie) or ''
-			#console.log "UID #{uid}"
+			console.log "UID #{uid}"
 			# attach context of that user to the request
 			if cache[uid]
 				req.context = cache[uid]
@@ -172,7 +172,7 @@ module.exports.authCookie = (options = {}) ->
 				getContext uid, (err, context) ->
 					# N.B. any error in getting user just means no user
 					cache[uid] = req.context = context or user: {}
-					#console.log "USER", req.context.user
+					console.log "USER", req.context
 					# freeze the context
 					#Object.freeze context
 					#
@@ -349,30 +349,6 @@ module.exports.mount = (method, path, handler) ->
 				next()
 
 #
-# serve chrome page
-#
-
-###
-
-# TODO: code
-
-_.mixin
-	#
-	# memoize an expensive function by storing its results
-	#
-	memoizeAsync: (func, key, args..., callback) ->
-		cache = {}
-		() ->
-			if cache.hasOwnProperty(key)
-				callback cache[key]
-			else
-				func args, (err, result) ->
-					cache[key] = result
-					callback? err, result
-###
-
-
-#
 # serve pure static content from options.root
 #
 module.exports.static = (options = {}) ->
@@ -380,7 +356,8 @@ module.exports.static = (options = {}) ->
 	options.root ?= 'public'
 	options.default ?= 'index.html'
 
-	require('stack.static') options.root, options
+	require('simple-mime')
+	require('./static') options.root, options
 
 #
 # serve dynamic content based on template files using options.map
@@ -388,10 +365,6 @@ module.exports.static = (options = {}) ->
 module.exports.dynamic = (options = {}) ->
 
 	fs = require 'fs'
-
-	escapeHTML = (x) ->
-		return '' if x == null
-		String(x).replace(/&(?!\w+;|#\d+;|#x[\da-f]+;)/gi, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 	tmplSyntax = options.syntax or {
 		evaluate    : /\{\{([\s\S]+?)\}\}/g
@@ -425,89 +398,10 @@ module.exports.dynamic = (options = {}) ->
 #
 module.exports.getRemoteUserInfo = (options = {}) ->
 
-	getLocation = require('simple-geoip')(options.fileName).lookupByIP
-	useragent = require 'useragent'
+	getInfo = require('./helpers').getRemoteUserInfo options
 
 	handler = (req, res, next) ->
-		ip = req.connection.remoteAddress
-		agent = req.headers['user-agent'] or ''
-		req.info =
-			ip: ip
-			geo: getLocation(ip, true)
-			agent: useragent.parser agent
-			browser: useragent.browser agent
-			nls: req.headers['accept-language']?.replace(/[,;].*$/, '').toLowerCase() or 'en-us'
+		req.info = getInfo req
 		#console.log req.info
 		next()
 		return
-
-#
-# serve websocket requests
-#
-module.exports.websocket0 = (server, options = {}) ->
-
-	#
-	# upgrade vanilla HTTP(S) server
-	#
-	require('ws').configureServer server
-
-	handler = (req, res, next) ->
-		if ws = res.webSocket
-			#console.log 'WS', ws
-			ws.on 'message', options.onmessage
-			ws.connect()
-		else
-			next()
-
-#
-# serve websocket requests
-#
-module.exports.websocket1 = (server, options = {}) ->
-
-	websocket = require('io').listen server,
-		#resource: 'ws'
-		flashPolicyServer: false
-		#transports: ['websocket', 'flashsocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
-		transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
-		#transportOptions:
-		#	websocket:
-		#		foo: 'bar'
-
-	websocket.on 'connection', options.connection
-
-
-#
-# serve websocket requests
-#
-module.exports.websocket = (server, options = {}) ->
-
-	websocket = require('ws0/ws/server').listen server,
-		#resource: 'ws'
-		flashPolicyServer: false
-		#transports: ['websocket', 'flashsocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
-		transports: ['websocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
-		#transportOptions:
-		#	websocket:
-		#		foo: 'bar'
-
-	websocket.on 'connection', options.connection
-
-
-#
-# various helpers
-#
-module.exports.helpers =
-
-	template: (options = {}) ->
-		tmplSyntax = options.syntax or {
-			evaluate    : /\{\{([\s\S]+?)\}\}/g
-			interpolate : /\$\{([\s\S]+?)\}/g
-		}
-		types = options.extensions or {
-			'.html': (data) -> _.template data.toString('utf8'), null, tmplSyntax
-		}
-		(data, name) ->
-			for ext, fn of types
-				if name.slice(-ext.length) is ext
-					return fn data
-			data

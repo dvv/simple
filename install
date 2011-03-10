@@ -1,32 +1,33 @@
 #!/bin/sh
 
+#
+# specify dependencies as a list of {dir|file}:{symlink|spec} lines
+# spec := COPY -- copy file; BUNDLE -- append file to a bundle
+#
 deps='
-documentcloud/underscore/underscore.js:underscore.js
 creationix/stack/stack.js:stack.js
-dvv/stack.static/src/index.coffee:stack.static.coffee
+christkv/node-mongodb-native:mongodb
+documentcloud/underscore/underscore.js:underscore.js
+#dvv/stack.static/src/index.coffee:stack.static.coffee
 creationix/simple-mime/simple-mime.js:simple-mime.js
 dvv/simple-geoip/lib:simple-geoip
 3rd-Eden/node-useragent/useragent.js:useragent.js
-christkv/node-mongodb-native:mongodb
-#bnoguchi/redis-node:redis
-cloudhead/eyes.js/lib/eyes.js:eyes.js
 tautologistics/node-htmlparser/lib/htmlparser.js:htmlparser.js
 LearnBoost/Socket.IO-node:io
-#stellaeof/node-websocket-handler:ws
-#nicokaiser/node-websocket-server/lib:ws0
-#
-#edtsech/underscore.string/lib/underscore.string.js:underscore.string.js
-#
-#documentcloud/underscore/underscore.js:../test/underscore.js
-#jquery/qunit/qunit:../test/qunit
 '
+
+#
+# DO NOT CHANGE AFTER THIS LINE
+#
 
 #
 # download dependencies
 #
 lib=node_modules
-jslib=js
-mkdir -p "$lib" #"$jslib"
+COPY=public/js
+BUNDLE=public/js/bundle.js
+mkdir -p "$lib"
+rm -f "$BUNDLE"
 for dep in $deps; do
 	# skip comments
 	case "$dep" in
@@ -39,32 +40,40 @@ for dep in $deps; do
 	path=${path#*/}
 	git=${path%%/*}
 	# fetch the package
-	echo link ${author}\'s $git to $link, path $path
+	echo -n "package ${author}'s $git: "
 	#continue
 	if ! test -d git/${git}; then
 		#git clone https://github.com/${author}/${git}.git git/${git}
 		mkdir -p git/${git}
-		wget -ct3 --progress=bar --no-check-certificate http://nodeload.github.com/${author}/${git}/tarball/master -O- | tar -xzf- --strip 1 -C git/${git}
+		wget -ct3 -q --progress=bar --no-check-certificate http://nodeload.github.com/${author}/${git}/tarball/master -O- | tar -xzf- --strip 1 -C git/${git}
 		cd git/${git}
 		#if test -f Makefile; then
 		#	make
 		#fi
 		if test -f wscript; then
-			node-waf configure build
+			node-waf distclean configure build
 		fi
 		cd ../..
 	fi
 	# symlink entry point
-	if test "Q$link" != 'Q'; then
+	if test "Q$link" = 'QBUNDLE'; then
+		echo "$path bundled into $BUNDLE"
+		cat "git/$path" >> "$BUNDLE"
+	elif test "Q$link" = 'QCOPY'; then
+		echo "$path copied to $COPY"
+		cp "git/$path" "$COPY"
+	elif test "Q$link" != 'Q'; then
+		echo "$path symlinked to $lib/$link"
 		test -e "$lib/$link" || ln -s "../git/$path" "$lib/$link"
 	fi
 done
 
 #
-# compile coffee stuff
+# compile coffee
 #
-coffee -bc -o lib src/*.coffee
+coffee -bc -o lib src/*
 
 #
-# compose rql
+# minify client-side stuff
 #
+#jsmin "$BUNDLE"
