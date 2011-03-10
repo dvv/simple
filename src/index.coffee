@@ -35,9 +35,11 @@
 #
 # improve console.log
 #
-#inspect = require('eyes.js').inspector stream: null
-#consoleLog = console.log
-#console.log = () -> consoleLog inspect arg for arg in arguments
+sys = require 'util'
+console.log = (args...) ->
+	for a in args
+		console.error sys.inspect a, false, 10
+	return
 
 #
 # flow
@@ -85,6 +87,22 @@ require './rql'
 Object.freeze _
 
 #
+# facet helpers
+#
+RestrictiveFacet = (obj, plus...) ->
+	# register permissive facet -- set of entity getters
+	expose = ['schema', 'id', 'query', 'get']
+	expose = expose.concat plus if plus.length
+	_.proxy obj, expose
+
+PermissiveFacet = (obj, plus...) ->
+	# register permissive facet -- set of entity accessors
+	expose = ['schema', 'id', 'query', 'get', 'add', 'update', 'remove', 'delete', 'undelete', 'purge']
+	expose = expose.concat plus if plus.length
+	_.proxy obj, expose
+
+
+#
 # improve http.IncomingMessage
 #
 require './request'
@@ -99,6 +117,8 @@ require './response'
 #
 module.exports =
 	Database: require './database'
+	RestrictiveFacet: RestrictiveFacet
+	PermissiveFacet: PermissiveFacet
 	run: require './server'
 	stack: require 'stack'
 	handlers: require './handlers'

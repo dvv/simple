@@ -1,14 +1,6 @@
 'use strict'
 
-#process.argv.shift() # still report 'node' as argv[0]
-#require.paths.unshift './node_modules' # coffee counts from coffee-script binary so far
-
 simple = require './lib'
-
-sys = require 'util'
-console.log = (args...) ->
-	for a in args
-		console.error sys.inspect a, false, 10
 
 #
 # configuration
@@ -129,18 +121,6 @@ schema.Course =
 # ...
 #
 
-RestrictiveFacet = (obj, plus...) ->
-	# register permissive facet -- set of entity getters
-	expose = ['schema', 'id', 'query', 'get']
-	expose = expose.concat plus if plus.length
-	_.proxy obj, expose
-
-PermissiveFacet = (obj, plus...) ->
-	# register permissive facet -- set of entity accessors
-	expose = ['schema', 'id', 'query', 'get', 'add', 'update', 'remove', 'delete', 'undelete', 'purge']
-	expose = expose.concat plus if plus.length
-	_.proxy obj, expose
-
 s = ''
 for i in [0..599]
 	s += '1234567890'
@@ -167,9 +147,9 @@ All {},
 		model = exposed
 
 		facet =
-			Language: PermissiveFacet model.Language
-			Geo: RestrictiveFacet model.Geo
-			Course: RestrictiveFacet model.Course
+			Language: simple.PermissiveFacet model.Language
+			Geo: simple.RestrictiveFacet model.Geo
+			Course: simple.RestrictiveFacet model.Course
 
 		#
 		# define capability object for given user uid

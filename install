@@ -7,13 +7,14 @@
 deps='
 creationix/stack/stack.js:stack.js
 christkv/node-mongodb-native:mongodb
-documentcloud/underscore/underscore.js:underscore.js
+dvv/underscore/underscore.js:underscore.js
 #dvv/stack.static/src/index.coffee:stack.static.coffee
 creationix/simple-mime/simple-mime.js:simple-mime.js
 dvv/simple-geoip/lib:simple-geoip
 3rd-Eden/node-useragent/useragent.js:useragent.js
 tautologistics/node-htmlparser/lib/htmlparser.js:htmlparser.js
-LearnBoost/Socket.IO-node:io
+#LearnBoost/Socket.IO-node:io
+stephank/Socket.IO-node:io
 '
 
 #

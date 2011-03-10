@@ -163,16 +163,16 @@ module.exports.authCookie = (options = {}) ->
 			# get the user ID
 			# N.B. we use '' for all falsy uids
 			uid = req.cookie.get(cookie) or ''
-			console.log "UID #{uid}"
+			#console.log "UID #{uid}"
 			# attach context of that user to the request
-			if cache[uid]
+			if cache.hasOwnProperty uid
 				req.context = cache[uid]
 				next()
 			else
 				getContext uid, (err, context) ->
 					# N.B. any error in getting user just means no user
 					cache[uid] = req.context = context or user: {}
-					console.log "USER", req.context
+					#console.log "USER", req.context
 					# freeze the context
 					#Object.freeze context
 					#
@@ -294,7 +294,7 @@ module.exports.jsonrpc = (options = {}) ->
 					args = if Array.isArray call.params then call.params else if call.params then [call.params] else []
 					args.unshift context
 					args.push step
-					#console.log 'CALLING', args, fn.length
+					console.log 'CALLING', args, fn.length
 					if args.length isnt fn.length
 						return step 406
 					fn.apply null, args

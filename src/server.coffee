@@ -409,9 +409,9 @@ module.exports = (app, options = {}) ->
 			require('child_process').exec cmd, (err, out) ->
 				restarting = false
 				files = out.trim().split '\n'
-				process.log err, "WATCH?: #{files}"
+				#process.log err, "WATCH?: #{files}"
 				files.forEach (file) ->
-					process.log "WATCH: #{file}"
+					#process.log "WATCH: #{file}"
 					fs.watchFile file, {interval: options.watch or 100}, (curr, prev) ->
 						return if restarting
 						if curr.mtime > prev.mtime
