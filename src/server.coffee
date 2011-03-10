@@ -229,7 +229,10 @@ module.exports = (app, options = {}) ->
 		#
 		workers = {} # array of workers
 		args = options.argv or process.argv # allow to override workers arguments
-		env = _.extend {}, process.env, options.env or {} # copy environment
+		# copy environment
+		env = {}
+		env[k] = v for own k, v of process.env
+		env[k] = v for own k, v of options.env or {}
 		spawnWorker = () ->
 			env._NODE_WORKER_FOR_ = process.pid
 			worker = require('child_process').spawn args[0], args.slice(1),
@@ -267,7 +270,7 @@ module.exports = (app, options = {}) ->
 			#
 			# relay raw data to all known workers
 			#
-			#stream.on 'data', (data) -> _.each workers, (worker) -> worker.write data
+			#stream.on 'data', (data) -> worker.write data for pid, worker of workers
 
 			#
 			# wait for complete JSON object to come, parse it and emit 'message' event
@@ -297,7 +300,7 @@ module.exports = (app, options = {}) ->
 					if worker is stream
 						delete workers[pid]
 				# start new worker
-				spawnWorker() if nworkers > _.size workers
+				spawnWorker() if nworkers > Object.keys(workers).length
 				return
 
 		#
@@ -368,7 +371,7 @@ module.exports = (app, options = {}) ->
 					mem: () ->
 						console.log process.memoryUsage()
 					status: () ->
-						_.each workers, (worker, pid) ->
+						for pid, worker of workers
 							# thanks 'LearnBoost/cluster'
 							try
 								process.kill pid, 0
@@ -390,7 +393,7 @@ module.exports = (app, options = {}) ->
 				process.log "REPL running in the console. Use CTRL+C to stop."
 			else
 				net.createServer(REPL).listen options.repl
-				if _.isNumber options.repl
+				if typeof options.repl is 'number'
 					process.log "REPL running on 127.0.0.1:#{options.repl}. Use CTRL+C to stop."
 				else
 					process.log "REPL running on #{options.repl}. Use CTRL+C to stop."

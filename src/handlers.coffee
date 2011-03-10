@@ -76,6 +76,9 @@ module.exports.body = (options = {}) ->
 #
 # decode request JSON body
 #
+# N.B. to be reliable must be the first in middleware
+# consider using pause/resume helpers from express otherwise
+#
 module.exports.jsonBody = (options = {}) ->
 
 	(req, res, next) ->
@@ -139,7 +142,7 @@ module.exports.authCookie = (options = {}) ->
 		# helper to set/clear secured cookie
 		require('http').ServerResponse::setSession = (session) ->
 			cookieOptions = path: '/'
-			if _.isObject session
+			if session and typeof session is 'object'
 				# set the cookie
 				cookieOptions.expires = session.expires if session.expires
 				@req.cookie.set cookie, session.uid, cookieOptions
@@ -175,13 +178,67 @@ module.exports.authCookie = (options = {}) ->
 					#console.log "USER", req.context
 					# freeze the context
 					#Object.freeze context
-					#
 					next()
+			return
 	else
 		(req, res, next) ->
 			# null user
 			req.context = user: {}
 			next()
+			return
+
+#
+# perform basic www authentication
+#
+module.exports.authBasic = (options = {}) ->
+
+	getContext = options.getContext
+
+	if getContext
+
+		realm = options.realm or 'simple'
+
+		# helpers
+		unauthorized = (res) ->
+			res.setHeader 'WWW-Authenticate', "Basic realm=\"#{realm}\""
+			res.send 401
+			return
+
+		#
+		# contexts cache
+		# TODO: how to reset?
+		#
+		cache = {}
+
+		#
+		# handler
+		#
+		(req, res, next) ->
+			auth = req.headers.authorization
+			return unauthorized res unless auth
+			[scheme, credentials] = auth.split ' '
+			return res.send 400 unless scheme is 'Basic'
+			[uid, pass] = new Buffer(credentials, 'base64').toString().split ':'
+			console.log "UID #{uid} PASS #{pass}"
+			# attach context of that user to the request
+			if cache.hasOwnProperty uid
+				req.context = cache[uid]
+				next()
+			else
+				getContext {uid: uid, pass: pass}, (err, context) ->
+					# N.B. any error in getting user just means no user
+					cache[uid] = req.context = context or user: {}
+					#console.log "USER", req.context
+					# freeze the context
+					Object.freeze context
+					next()
+			return
+	else
+		(req, res, next) ->
+			# null user
+			req.context = user: {}
+			next()
+			return
 
 #
 # jsonrpc handler
@@ -203,7 +260,7 @@ module.exports.jsonrpc = (options = {}) ->
 			(xxx, yyy, step) ->
 				#console.log 'PARSEDBODY', req.params
 				# pass errors to serializer
-				return step req.params if _.isString req.params
+				return step req.params if typeof req.params is 'string'
 				#
 				# parse the query
 				#
@@ -216,7 +273,7 @@ module.exports.jsonrpc = (options = {}) ->
 				# find the method which will handle the request
 				#
 				method = req.method
-				parts = _.map req.location.pathname.substring(1).split('/'), (x) -> decodeURIComponent x
+				parts = req.location.pathname.substring(1).split('/').map (x) -> decodeURIComponent x
 				data = req.params
 				context = req.context
 				#

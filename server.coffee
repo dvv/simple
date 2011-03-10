@@ -167,6 +167,10 @@ All {},
 			simple.handlers.jsonBody
 				maxLength: 0 # set to >0 to limit the number of bytes
 
+			simple.handlers.authBasic
+				getContext: getContext
+				#realm: 'simple'
+
 			simple.handlers.mount 'GET', '/foo0', (req, res, next) ->
 				res.send 'GOT FROM HOME'
 
