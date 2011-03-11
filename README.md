@@ -5,7 +5,7 @@ are about providing sugar to do routing and/or template rendering, paying no or 
 
 **Simple** is written in pure [CoffeeScript](https://github.com/jashkenas/coffee-script) and uses:
 
-- creationix's [Stack](https://github.com/creationix/stack) to form middleware
+- creationix's [stack](https://github.com/creationix/stack) to form middleware
 
 - jed's Secure [cookies](https://github.com/jed/cookie-node) to persist authenticated user id
 
@@ -13,7 +13,7 @@ are about providing sugar to do routing and/or template rendering, paying no or 
 
 - christkv's [node-mongodb-native](https://github.com/christkv/node-mongodb-native) as persistence layer
 
-**Simple** can be run as single process, or as robust multiple processes farm similar to [multi-node](http://www.sitepen.com/blog/2010/07/14/multi-node-concurrent-nodejs-http-server/) or [spark](https://github.com/senchalabs/spark)
+**Simple** can be run as single process, or as robust multiple processes farm similar to [multi-node](http://www.sitepen.com/blog/2010/07/14/multi-node-concurrent-nodejs-http-server/) or [cluster](https://github.com/LearnBoost/cluster)
 
 **Simple** talks _just_ JSON REST/RPC. All rendering is drawn as client-side task. I strongly suggest to look at [Backbone](https://github.com/documentcloud/backbone) as client-side MVC.
 
@@ -33,7 +33,7 @@ Run:
 
 ## Example and test
 
-    ./test.coffee
+    coffee test.coffee
 
 and point your browser to http://127.0.0.1:3000
 

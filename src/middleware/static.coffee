@@ -51,7 +51,7 @@ exports = module.exports = (root, options = {}) ->
     if methods.indexOf(req.method) == -1
       res.writeHead 405, accept: 'GET, HEAD'
       return res.end()
-    if defaultFile && req.url.match(/\/$/)
+    if defaultFile and req.url.match(/\/$/)
       req.url = "#{req.url}#{defaultFile}"
 
     options.headers = headers

@@ -46,7 +46,8 @@ http.IncomingMessage::parse = () ->
 
 	# parse URL
 	@url = path.normalize @url
-	@location = parseUrl @url, true
+	@location = parseUrl @url, false #true
+	@params = {} #@location.query or {}
 
 	# N.B. from now on querystring is stripped from the leading "?"
 	@location.search = @location.search?.substring 1
@@ -60,9 +61,6 @@ http.IncomingMessage::parse = () ->
 	# honor X-HTTP-Method-Override
 	if @headers['x-http-method-override']
 		@method = @headers['x-http-method-override'].toUpperCase()
-
-	# parse URL parameters
-	@params = @location.query or {}
 
 	# sanitize headers and method
 	headers = @headers

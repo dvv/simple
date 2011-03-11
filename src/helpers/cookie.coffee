@@ -9,6 +9,16 @@
 #
 
 crypto = require 'crypto'
+_ = require 'underscore'
+
+###
+memoize = (func) ->
+	memo = {}
+	(key) ->
+		unless memo.hasOwnProperty key
+			memo[key] = func.apply @, arguments
+		memo[key]
+###
 
 # regexp helper to extract a named cookie
 getCookiePattern = _.memoize (name) ->

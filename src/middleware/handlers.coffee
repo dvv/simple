@@ -133,7 +133,7 @@ module.exports.logResponse = (options) ->
 #
 module.exports.authCookie = (options = {}) ->
 
-	Cookie = require './cookie'
+	Cookie = require '../helpers/cookie'
 	cookie = options.cookie or 'uid'
 	getContext = options.getContext
 
@@ -241,148 +241,6 @@ module.exports.authBasic = (options = {}) ->
 			return
 
 #
-# jsonrpc handler
-#
-# given req.context, try to find there the request handler and execute it
-#
-# TODO: document!
-#
-module.exports.jsonrpc = (options = {}) ->
-
-	# TODO: put here a generic json-rpc.handler
-
-	(req, res, next) ->
-
-		#console.log 'HEADS', req.headers
-		#return next() unless req.headers.accept.split(';')[0] is 'application/json'
-
-		Next {},
-			(xxx, yyy, step) ->
-				#console.log 'PARSEDBODY', req.params
-				# pass errors to serializer
-				return step req.params if typeof req.params is 'string'
-				#
-				# parse the query
-				#
-				search = decodeURI(req.location.search or '')
-				#console.log 'QUERY?', search
-				query = _.rql search
-				#console.log 'QUERY!', query
-				return step query.error if query.error
-				#
-				# find the method which will handle the request
-				#
-				method = req.method
-				parts = req.location.pathname.substring(1).split('/').map (x) -> decodeURIComponent x
-				data = req.params
-				context = req.context
-				#
-				# translate GET into fake RPC call
-				#
-				if method is 'GET'
-					#
-					# GET /Foo?query --> POST /Foo {method: 'query', params: [query]}
-					# GET /Foo/ID?query --> POST /Foo {method: 'get', params: [ID]}
-					#
-					call =
-						jsonrpc: '2.0'
-						method: 'query'
-						params: [query]
-					if parts[1]
-						call.method = 'get'
-						call.params = [parts[1]]
-				else if method is 'PUT'
-					#
-					# PUT /Foo?query {changes} --> POST /Foo {method: 'update', params: [query, changes]}
-					# TODO: PUT /Foo/ID?query {changes} --> POST /Foo {method: 'update', params: [[ID], changes]}
-					# TODO: PUT /Foo/ID?query {ids:[], changes:changes} --> POST /Foo {method: 'update', params: [[ids], changes]}
-					#
-					call =
-						jsonrpc: '2.0'
-						method: 'update'
-						params: [query, data]
-					if parts[1]
-						call.params = [[parts[1]], data]
-				else if method is 'POST'
-					if data.jsonrpc # and data.method
-						call = data
-						#
-						# POST / {method: M, params: P,...} --> context[M].apply context, P
-						# POST /Foo {method: [M, N], params: P,...} --> context.Foo[M][N].apply context, P
-						#
-						# TODO:
-						# update takes _array_ [query, changes]
-						# FIXME: params check and recheck and triple check!!!
-					else
-						#
-						# POST /Foo {props} --> context[Foo].add.apply context, props
-						#
-						call =
-							jsonrpc: '2.0'
-							method: 'add'
-							params: [data]
-				else if method is 'DELETE'
-					#
-					# DELETE /Foo?query --> POST /Foo {method: 'remove', params: [query]}
-					# TODO: DELETE /Foo/ID?query --> POST /Foo {method: 'remove', params: [[ID]]}
-					# TODO: DELETE /Foo/ID?query {ids:[]} --> POST /Foo {method: 'remove', params: [ids]}
-					#
-					call =
-						jsonrpc: '2.0'
-						method: 'remove'
-						#params: if Array.isArray data?.ids then [data.ids] else [query]
-						params: [query]
-					if parts[1]
-						call.params = [[parts[1]]]
-				else
-					# verb not supported
-					return next()
-				#
-				# do RPC call
-				#
-				# descend into context own properties
-				#
-				#
-				if parts[0] isnt ''
-					call.method = if call.method then [parts[0], call.method] else [parts[0]]
-				#console.log 'CALL', call
-				fn = _.get context, call.method
-				if fn
-					args = if Array.isArray call.params then call.params else if call.params then [call.params] else []
-					args.unshift context
-					args.push step
-					console.log 'CALLING', args, fn.length
-					if args.length isnt fn.length
-						return step 406
-					fn.apply null, args
-					#return
-				else
-					# no handler in context
-					# check login call
-					if call.method is 'login' and context.verify
-						context.verify call.params, (err, session) ->
-							step res.setSession err or session
-					else
-						# no handler here
-						#console.log 'NOTFOUND', call
-						next()
-			(err, result) ->
-				#console.log 'RESULT', arguments
-				#res.send err or result
-				response =
-					jsonrpc: '2.0'
-				#response.id = data.id if data?.id
-				if err
-					response.error = err.message or err
-				else if result is undefined
-					response.result = true
-				else
-					response.result = result
-				# respond
-				#res.send response, 'content-type': 'application/json-rpc; charset=utf-8'
-				res.send response
-
-#
 # bind a handler to a location, and optionally HTTP verb
 #
 module.exports.mount = (method, path, handler) ->
@@ -422,6 +280,7 @@ module.exports.static = (options = {}) ->
 module.exports.dynamic = (options = {}) ->
 
 	fs = require 'fs'
+	template = require('underscore').template
 
 	tmplSyntax = options.syntax or {
 		evaluate    : /\{\{([\s\S]+?)\}\}/g
@@ -443,7 +302,7 @@ module.exports.dynamic = (options = {}) ->
 			else
 				fs.readFile file, (err, html) ->
 					return next err if err
-					cache[file] = _.template html.toString('utf8'), null, tmplSyntax
+					cache[file] = template html.toString('utf8'), null, tmplSyntax
 					handler req, res, next
 					return
 		else
@@ -451,14 +310,93 @@ module.exports.dynamic = (options = {}) ->
 		return
 
 #
-# get what we can from remote ip and browser info
+# REST handler
 #
-module.exports.getRemoteUserInfo = (options = {}) ->
+# given req.context, try to find there the request handler and execute it
+#
+module.exports.rest = (options = {}) ->
 
-	getInfo = require('./helpers').getRemoteUserInfo options
+	(req, res, next) ->
 
-	handler = (req, res, next) ->
-		req.info = getInfo req
-		#console.log req.info
-		next()
-		return
+		# pass thru if already JSON-RPC or parse error occured
+		data = req.params
+		if (typeof data is 'string') or (data.jsonrpc and data.hasOwnProperty('method') and data.hasOwnProperty('params'))
+			return next()
+		#
+		# parse the query
+		#
+		query = decodeURI(req.location.search) or ''
+		#
+		# find the method which will handle the request
+		#
+		method = req.method
+		parts = req.location.pathname.substring(1).split('/').map (x) -> decodeURIComponent x
+		lastPart = parts.pop()
+		#
+		# translate REST into an RPC call
+		#
+		if method is 'GET'
+			#
+			# GET /Foo?query --> RPC {jsonrpc: '2.0', method: ['Foo', 'query'], params: [query]}
+			# GET /Foo/ID?query --> RPC {jsonrpc: '2.0', method: ['Foo', 'get'], params: [ID]}
+			#
+			call =
+				jsonrpc: '2.0'
+				method: 'query'
+				params: [query]
+			if lastPart
+				call.method = 'get'
+				call.params[0] = lastPart # ??? [lastPart]
+		else if method is 'PUT'
+			#
+			# PUT /Foo?query {changes} --> RPC {jsonrpc: '2.0', method: ['Foo', 'update'], params: [query, changes]}
+			# PUT /Foo/ID?query {changes} --> RPC {jsonrpc: '2.0', method: ['Foo', 'update'], params: [[ID], changes]}
+			# TODO: PUT /Foo/ID?query {ids:[], changes:changes} --> RPC {jsonrpc: '2.0', method: ['Foo', 'update'], params: [[ids], changes]}
+			#
+			call =
+				jsonrpc: '2.0'
+				method: 'update'
+				params: [query, data]
+			if lastPart
+				call.params[0] = [lastPart]
+			if data.ids and data.changes
+				call.params = [data.ids, data.changes]
+		else if method is 'POST'
+			#
+			# POST /Foo {data} --> RPC {jsonrpc: '2.0', method: ['Foo', 'add'], params: [data]}
+			#
+			call =
+				jsonrpc: '2.0'
+				method: 'add'
+				params: [data]
+		else if method is 'DELETE'
+			#
+			# DELETE /Foo?query -->RPC {jsonrpc: '2.0', method: ['Foo', 'remove'], params: [query]}
+			# DELETE /Foo/ID?query --> POST /Foo {method: 'remove', params: [[ID]]}
+			# DELETE /Foo/ID?query {ids:[]} --> POST /Foo {method: 'remove', params: [ids]}
+			#
+			call =
+				jsonrpc: '2.0'
+				method: 'remove'
+				params: [query]
+			if lastPart
+				call.params[0] = [lastPart]
+			if data.ids
+				call.params = [data.ids]
+		else
+			#
+			# verb not supported
+			#
+			return next()
+		#
+		# honor parts[0:-1]
+		#
+		if parts[0] isnt ''
+			call.method = if call.method then parts.concat(call.method) else parts
+		#
+		# populate req.data
+		#
+		req.data = call
+		#console.log 'DATA', req.data
+		res.send req.data
+		#next()

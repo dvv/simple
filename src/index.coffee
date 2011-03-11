@@ -42,7 +42,7 @@ console.log = (args...) ->
 	return
 
 #
-# flow
+# flow control
 #
 global.Next = (context, steps...) ->
 	next = (err, result) ->
@@ -78,31 +78,6 @@ global.All = (context, steps...) ->
 	next()
 
 #
-# expose Object helpers
-#
-global._ = require 'underscore'
-require './object'
-require './validate'
-require './rql'
-Object.freeze _
-
-#
-# facet helpers
-#
-RestrictiveFacet = (obj, plus...) ->
-	# register permissive facet -- set of entity getters
-	expose = ['schema', 'id', 'query', 'get']
-	expose = expose.concat plus if plus.length
-	_.proxy obj, expose
-
-PermissiveFacet = (obj, plus...) ->
-	# register permissive facet -- set of entity accessors
-	expose = ['schema', 'id', 'query', 'get', 'add', 'update', 'remove', 'delete', 'undelete', 'purge']
-	expose = expose.concat plus if plus.length
-	_.proxy obj, expose
-
-
-#
 # improve http.IncomingMessage
 #
 require './request'
@@ -116,9 +91,6 @@ require './response'
 # expose interface
 #
 module.exports =
-	Database: require './database'
-	RestrictiveFacet: RestrictiveFacet
-	PermissiveFacet: PermissiveFacet
 	run: require './server'
 	stack: require 'stack'
-	handlers: require './handlers'
+	handlers: require './middleware/handlers'

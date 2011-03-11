@@ -89,7 +89,6 @@ module.exports = (app, options = {}) ->
 				#ca: options.sslCACerts.map (fname) -> fs.readFileSync fname, 'utf8'
 			server = require('https').createServer credentials
 		else
-			#server = if options.websocket then require('ws0/ws/server').createServer(debug: true) else require('http').createServer()
 			server = require('http').createServer()
 			
 		# attach request handler
@@ -157,7 +156,8 @@ module.exports = (app, options = {}) ->
 		#
 		# message has arrived
 		#
-		comm.on 'message', app.messageHandler?.bind(process, (websocket?.broadcast?.bind websocket))
+		if app.messageHandler
+			comm.on 'message', app.messageHandler.bind process, (websocket?.broadcast?.bind websocket)
 
 		#
 		# master socket descriptor has arrived
@@ -281,7 +281,6 @@ module.exports = (app, options = {}) ->
 			# message from a worker
 			#
 			stream.on 'message', (data) ->
-				#process.log "FROMCLIENT #{data.from}: " + JSON.stringify(data)
 				# register new worker
 				if data.channel is 'bcast'
 					data = JSON.stringify data
@@ -343,7 +342,8 @@ module.exports = (app, options = {}) ->
 			REPL = (stream) ->
 				repl = require('repl').start 'node>', stream
 				# expose master control interface
-				_.extend repl.context,
+				repl.context[k] = v for k, v of {
+					app: app
 					shutdown: () ->
 						nworkers = 0
 						process.kill process.pid, 'SIGQUIT'
@@ -358,9 +358,11 @@ module.exports = (app, options = {}) ->
 						# add workers
 						if n > 0
 							while n-- > 0
-								spawnWorker()
-								# adjust max workers count
-								++nworkers
+								setTimeout () ->
+									spawnWorker()
+									# adjust max workers count
+									++nworkers
+								, n * 1000
 						# remove workers
 						else if n < 0
 							# adjust max workers count
@@ -371,6 +373,7 @@ module.exports = (app, options = {}) ->
 					mem: () ->
 						console.log process.memoryUsage()
 					status: () ->
+						console.log "TOTAL #{Object.keys(workers).length} worker(s)\n"
 						for pid, worker of workers
 							# thanks 'LearnBoost/cluster'
 							try
@@ -383,6 +386,8 @@ module.exports = (app, options = {}) ->
 									throw err
 							console.log "STATUS for #{pid} is #{status}"
 						return
+				}
+				return
 
 			#
 			# start REPL
@@ -414,7 +419,7 @@ module.exports = (app, options = {}) ->
 				files = out.trim().split '\n'
 				#process.log err, "WATCH?: #{files}"
 				files.forEach (file) ->
-					#process.log "WATCH: #{file}"
+					process.log "WATCH: #{file}"
 					fs.watchFile file, {interval: options.watch or 100}, (curr, prev) ->
 						return if restarting
 						if curr.mtime > prev.mtime
