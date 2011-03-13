@@ -5,16 +5,25 @@
 # spec := COPY -- copy file; BUNDLE -- append file to a bundle
 #
 deps='
-creationix/stack/stack.js:stack.js
 dvv/underscore/underscore.js:underscore.js
-#dvv/stack.static/src/index.coffee:stack.static.coffee
 creationix/simple-mime/simple-mime.js:simple-mime.js
-LearnBoost/Socket.IO-node:io
+LearnBoost/Socket.IO-node:socket.io
+samshull/node-proxy:node-proxy
+flotype/now:now
 '
 
 #
 # DO NOT CHANGE AFTER THIS LINE
 #
+
+WGET='wget -ct3 -q --progress=bar --no-check-certificate'
+
+json() { # json, key
+	_node_tmp_=___node___
+	echo "for(d in JSON.parse(require('fs').readFileSync('$1','utf8')).$2){console.log(d)}" >${_node_tmp_}
+	node ${_node_tmp_}
+	rm -f ${_node_tmp_}
+}
 
 #
 # download dependencies
@@ -41,14 +50,18 @@ for dep in $deps; do
 	if ! test -d git/${git}; then
 		#git clone https://github.com/${author}/${git}.git git/${git}
 		mkdir -p git/${git}
-		wget -ct3 -q --progress=bar --no-check-certificate http://nodeload.github.com/${author}/${git}/tarball/master -O- | tar -xzf- --strip 1 -C git/${git}
+		$WGET http://nodeload.github.com/${author}/${git}/tarball/master -O- | tar -xzf- --strip 1 -C git/${git}
 		cd git/${git}
-		#if test -f Makefile; then
-		#	make
-		#fi
+		if test -f Makefile; then
+			make
+		fi
 		if test -f wscript; then
 			node-waf distclean configure build
 		fi
+		# deps via package.json
+		#if test -f package.json; then
+		#	json 'dependencies'
+		#fi
 		cd ../..
 	fi
 	# symlink entry point
@@ -62,12 +75,29 @@ for dep in $deps; do
 		echo "$path symlinked to $lib/$link"
 		test -e "$lib/$link" || ln -s "../git/$path" "$lib/$link"
 	fi
+
+		cd git/${git}
+		# deps via package.json
+		if test -f package.json; then
+			json 'package.json' 'dependencies' | while read d; do
+				echo "depends on $d"
+				tmp1="___$d"
+				#wget "http://search.npmjs.org/api/$d" -O- | json '/dev/stdin' 'repository'
+				wget "http://search.npmjs.org/api/$d" -O ${tmp1}
+				json ${tmp1} 'repository' | while read drep; do
+					echo "DEPON $drep"
+				done
+				#rm -f ${tmp1}
+			done
+		fi
+		cd ../..
+
 done
 
 #
 # compile coffee
 #
-coffee -bc -o lib src/*
+#coffee -bc -o lib src/*
 
 #
 # minify client-side stuff

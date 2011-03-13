@@ -111,21 +111,17 @@ module.exports.jsonBody = (options = {}) ->
 			next()
 
 #
-# log request
+# log request and response code
 #
-module.exports.logRequest = (options) ->
+# thanks creationix/creationix/log
+#
+module.exports.log = (options = {}) ->
 
 	handler = (req, res, next) ->
-		console.log "REQUEST #{req.method} #{req.url}", req.params
-		next()
-
-#
-# log response
-#
-module.exports.logResponse = (options) ->
-
-	handler = (req, res, next) ->
-		console.log "RESPONSE", 'NYI'
+		send = res.send
+		res.send = () ->
+			console.log "REQUEST #{req.method} #{req.url} " + JSON.stringify(req.params) + " -- RESPONSE " + JSON.stringify(arguments)
+			send.apply @, arguments
 		next()
 
 #
@@ -133,7 +129,7 @@ module.exports.logResponse = (options) ->
 #
 module.exports.authCookie = (options = {}) ->
 
-	Cookie = require '../helpers/cookie'
+	Cookie = require './cookie'
 	cookie = options.cookie or 'uid'
 	getContext = options.getContext
 
@@ -177,7 +173,7 @@ module.exports.authCookie = (options = {}) ->
 					cache[uid] = req.context = context or user: {}
 					#console.log "USER", req.context
 					# freeze the context
-					#Object.freeze context
+					Object.freeze context
 					next()
 			return
 	else
@@ -218,7 +214,7 @@ module.exports.authBasic = (options = {}) ->
 			return unauthorized res unless auth
 			[scheme, credentials] = auth.split ' '
 			return res.send 400 unless scheme is 'Basic'
-			[uid, pass] = new Buffer(credentials, 'base64').toString().split ':'
+			[uid, pass] = new Buffer(credentials, 'base64').toString('utf8').split ':'
 			console.log "UID #{uid} PASS #{pass}"
 			# attach context of that user to the request
 			if cache.hasOwnProperty uid
@@ -266,13 +262,18 @@ module.exports.mount = (method, path, handler) ->
 #
 # serve pure static content from options.root
 #
-module.exports.static = (options = {}) ->
+module.exports.static0 = (options = {}) ->
 
 	options.root ?= 'public'
 	options.default ?= 'index.html'
 
 	require('simple-mime')
-	require('./static') options.root, options
+	require('./static0') options.root, options
+
+#
+# serve pure static content from options.root
+#
+module.exports.static = require './static'
 
 #
 # serve dynamic content based on template files using options.map
@@ -310,93 +311,81 @@ module.exports.dynamic = (options = {}) ->
 		return
 
 #
-# REST handler
-#
-# given req.context, try to find there the request handler and execute it
+# REST/JSON-RPC unified handler
 #
 module.exports.rest = (options = {}) ->
 
+	convertToRPC = require '../helpers/rest'
+
 	(req, res, next) ->
 
-		# pass thru if already JSON-RPC or parse error occured
 		data = req.params
-		if (typeof data is 'string') or (data.jsonrpc and data.hasOwnProperty('method') and data.hasOwnProperty('params'))
-			return next()
-		#
-		# parse the query
-		#
-		query = decodeURI(req.location.search) or ''
-		#
-		# find the method which will handle the request
-		#
-		method = req.method
-		parts = req.location.pathname.substring(1).split('/').map (x) -> decodeURIComponent x
-		lastPart = parts.pop()
-		#
-		# translate REST into an RPC call
-		#
-		if method is 'GET'
-			#
-			# GET /Foo?query --> RPC {jsonrpc: '2.0', method: ['Foo', 'query'], params: [query]}
-			# GET /Foo/ID?query --> RPC {jsonrpc: '2.0', method: ['Foo', 'get'], params: [ID]}
-			#
-			call =
-				jsonrpc: '2.0'
-				method: 'query'
-				params: [query]
-			if lastPart
-				call.method = 'get'
-				call.params[0] = lastPart # ??? [lastPart]
-		else if method is 'PUT'
-			#
-			# PUT /Foo?query {changes} --> RPC {jsonrpc: '2.0', method: ['Foo', 'update'], params: [query, changes]}
-			# PUT /Foo/ID?query {changes} --> RPC {jsonrpc: '2.0', method: ['Foo', 'update'], params: [[ID], changes]}
-			# TODO: PUT /Foo/ID?query {ids:[], changes:changes} --> RPC {jsonrpc: '2.0', method: ['Foo', 'update'], params: [[ids], changes]}
-			#
-			call =
-				jsonrpc: '2.0'
-				method: 'update'
-				params: [query, data]
-			if lastPart
-				call.params[0] = [lastPart]
-			if data.ids and data.changes
-				call.params = [data.ids, data.changes]
-		else if method is 'POST'
-			#
-			# POST /Foo {data} --> RPC {jsonrpc: '2.0', method: ['Foo', 'add'], params: [data]}
-			#
-			call =
-				jsonrpc: '2.0'
-				method: 'add'
-				params: [data]
-		else if method is 'DELETE'
-			#
-			# DELETE /Foo?query -->RPC {jsonrpc: '2.0', method: ['Foo', 'remove'], params: [query]}
-			# DELETE /Foo/ID?query --> POST /Foo {method: 'remove', params: [[ID]]}
-			# DELETE /Foo/ID?query {ids:[]} --> POST /Foo {method: 'remove', params: [ids]}
-			#
-			call =
-				jsonrpc: '2.0'
-				method: 'remove'
-				params: [query]
-			if lastPart
-				call.params[0] = [lastPart]
-			if data.ids
-				call.params = [data.ids]
-		else
-			#
-			# verb not supported
-			#
-			return next()
-		#
-		# honor parts[0:-1]
-		#
-		if parts[0] isnt ''
-			call.method = if call.method then parts.concat(call.method) else parts
-		#
-		# populate req.data
-		#
-		req.data = call
-		#console.log 'DATA', req.data
-		res.send req.data
-		#next()
+		Next req.context or {},
+			(err, dummy, step) ->
+				# pass parse errors to response
+				return step data if typeof data is 'string'
+				#
+				# parse query. FIXME: do we need it here?
+				#
+				query = decodeURI(req.location.search or '')
+				#console.log 'QUERY?', query
+				query = options.parseQuery query if options.parseQuery
+				#console.log 'QUERY!', query
+				return step query.error if query.error
+				#
+				# convert REST to RPC, to unify handling
+				#
+				unless data.jsonrpc and data.hasOwnProperty('method') and data.hasOwnProperty('params')
+					data = convertToRPC req.method, req.location.pathname, query, data
+				console.log 'CALL', data, req.context
+				#return res.send data
+				#
+				# drill down context properties
+				#
+				fn = @
+				if Array.isArray data.method
+					fn = fn and fn[i] for i in data.method
+				else
+					fn = fn[data.method]
+				#
+				# do RPC call
+				#
+				if fn
+					args = if Array.isArray data.params then data.params else if data.params then [data.params] else []
+					args.unshift context
+					args.push step
+					console.log 'CALLING', args, fn.length
+					# handler arguments count must coincide with args length
+					return step 406 if args.length isnt fn.length
+					fn.apply null, args
+				else
+					# no handler in context
+					# check login call
+					if data.method is 'login' and @verify
+						@verify data.params, (err, session) -> step res.setSession err or session
+					else
+						# no handler here
+						console.log 'NOTFOUND', data
+						next()
+			(err, result) ->
+				#console.log 'RESULT', arguments
+				#
+				# compose JSON-RPC response
+				#
+				if data.jsonrpc
+					response =
+						jsonrpc: '2.0'
+					#response.id = data.id if data?.id
+					if err
+						response.error = err.message or err
+					else if result is undefined
+						response.result = true
+					else
+						response.result = result
+				#
+				# compose REST response
+				#
+				else
+					response = err or result
+				# respond
+				res.send response

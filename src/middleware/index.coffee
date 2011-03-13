@@ -33,59 +33,45 @@
 ###
 
 #
-# improve console.log
+# improve http.IncomingMessage
 #
-sys = require 'util'
-console.log = (args...) ->
-	for a in args
-		console.error sys.inspect a, false, 10
-	return
+require './request'
 
 #
-# flow control
+# improve http.ServerResponse
 #
-global.Next = (context, steps...) ->
-	next = (err, result) ->
-		# N.B. only simple steps are supported -- no next.group() and next.parallel() as in Step
-		fn = steps.shift()
-		if fn
+require './response'
+
+#
+# thanks creationix/Stack
+#
+Stack = (layers...) ->
+	handle = errorHandler
+	layers.reverse().forEach (layer) ->
+		child = handle
+		handle = (req, res) ->
 			try
-				fn.call context, err, result, next
+				layer req, res, (err) ->
+					return errorHandler req, res, err if err
+					child req, res
 			catch err
-				next err
-		else
-			throw err if err
+				errorHandler req, res, err
+	handle
+
+#
+# mixin handlers
+#
+Stack[name] = fn for own name, fn of require('./handlers')
+
+#
+# fallback and error handler
+#
+errorHandler = (req, res, err) ->
+	if err
+		# TODO: configurable
+		console.error err.stack or err.message
+		res.send err
 		return
-	next()
-Object.defineProperty Next, 'nop', value: () ->
+	res.send 404
 
-global.All = (context, steps...) ->
-	next = (err, result) ->
-		throw err if err
-		# N.B. only simple steps are supported -- no next.group() and next.parallel() as in Step
-		fn = steps.shift()
-		if fn
-			try
-				fn.call context, err, result, next
-			catch err
-				console.log 'FATAL: ' + err.stack
-				process.exit 1
-		else
-			if err
-				console.log 'FATAL: ' + err.stack
-				process.exit 1
-		return
-	next()
-
-#
-# plugin _
-# FIXME: deserves?!
-#
-global._ = require 'underscore'
-
-#
-# expose interface
-#
-module.exports =
-	run: require './server'
-	middleware: require './middleware'
+module.exports = Stack

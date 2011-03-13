@@ -162,7 +162,7 @@ All {},
 		#
 		# define middleware stack
 		#
-		getHandler = (server) -> simple.stack(
+		getHandler = (server) -> simple.middleware(
 
 			simple.handlers.jsonBody
 				maxLength: 0 # set to >0 to limit the number of bytes

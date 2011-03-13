@@ -8,7 +8,7 @@ if process.argv[1].slice(-7) is '.coffee'
 	require.paths.unshift __dirname + '/node_modules'
 
 simple = require if process.argv[0] is 'coffee' then './src' else './lib'
-_ = require 'underscore'
+require './src/database/object'
 
 #
 # configuration
@@ -30,7 +30,7 @@ config =
 			ttl: 3600
 		stackTrace: true
 		watch: [__filename, 'test', 'src', 'lib']
-		shutdownTimeout: 10000
+		shutdownTimeout: 1000
 		#ipc: '.ipc'
 
 	security:
@@ -57,65 +57,73 @@ TESTSTR12000 = s+s
 #
 # define capability object for given user uid
 #
-getContext = (uid, next) -> next()
+getContext = (uid, next) -> next null, user: {}
+
+#
+# define application
+#
+app =
+	getContext: getContext
 
 #
 # define middleware stack
 #
-getHandler = (server) -> simple.stack(
+app.getHandler = (server) -> simple.middleware(
 
-	simple.handlers.jsonBody
+	#simple.middleware.log()
+
+	simple.middleware.jsonBody
 		maxLength: 0 # set to >0 to limit the number of bytes
+		# TODO: mime plugins
 
-	simple.handlers.mount 'GET', '/foo0', (req, res, next) ->
-		res.send 'GOT FROM HOME'
+	simple.middleware.mount 'GET', '/foo0', (req, res, next) ->
+		res.send 'GOT FROM FOO0'
 
-	simple.handlers.rest()
-
-	simple.handlers.authCookie
+	# TODO: unite
+	# TODO: /login handler
+	simple.middleware.authCookie
 		cookie: 'uid'
 		secret: config.security.secret
 		getContext: getContext
+	#simple.middleware.authBasic
+	#	getContext: getContext
+	#	#realm: 'simple'
 
-	simple.handlers.mount 'GET', '/foo1', (req, res, next) ->
-		res.send 'GOT FROM HOME'
+	simple.middleware.mount 'GET', '/foo1', (req, res, next) ->
+		res.send 'GOT FROM FOO1'
 
-	simple.handlers.dynamic
+	#simple.middleware.rest
+	#	parseQuery: _.rql
+
+	simple.middleware.mount 'GET', '/foo2', (req, res, next) ->
+		res.send 'GOT FROM FOO2'
+
+	simple.middleware.dynamic
 		map:
 			'/': 'test/index.html'
 
-	simple.handlers.mount 'GET', '/foo2', (req, res, next) ->
-		res.send 'GOT FROM HOME'
+	simple.middleware.mount 'GET', '/foo2', (req, res, next) ->
+		res.send 'GOT FROM FOO3'
 
-	simple.handlers.static
+	#simple.middleware.static '/', config.server.pub.dir, 'index.html',
+	#	#cacheMaxFileSizeToCache: 1024 # set to limit the size of cacheable file
+	#	cacheTTL: 1000
+
+	simple.middleware.static0
 		root: config.server.pub.dir
 		default: 'index.html'
 		#cacheMaxFileSizeToCache: 1024 # set to limit the size of cacheable file
 		cacheTTL: 1000
 
-	simple.handlers.mount 'GET', '/foo3', (req, res, next) ->
-		res.send 'GOT FROM HOME'
+	simple.middleware.mount 'GET', '/foo4', (req, res, next) ->
+		res.send 'GOT FROM FOO4'
 
-	simple.handlers.mount 'GET', '/6000', (req, res, next) ->
+	simple.middleware.mount 'GET', '/6000', (req, res, next) ->
 		res.send TESTSTR6000
-	simple.handlers.mount 'GET', '/12000', (req, res, next) ->
+	simple.middleware.mount 'GET', '/12000', (req, res, next) ->
 		res.send TESTSTR12000
 
-	#simple.handlers.authBasic
-	#	getContext: getContext
-	#	#realm: 'simple'
-
-	simple.handlers.mount 'POST', '/foo', (req, res, next) ->
-		res.send 'POSTED TO FOO'
-
 )
-
-#
-# compose application
-#
-app =
-	#getContext: getContext
-	getHandler: getHandler
 
 #
 # run the application

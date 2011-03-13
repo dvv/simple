@@ -90,7 +90,7 @@ module.exports = (app, options = {}) ->
 			server = require('https').createServer credentials
 		else
 			server = require('http').createServer()
-			
+
 		# attach request handler
 		# N.B. such pervert way of defining handler is for handler factory to have reference to the server!
 		server.on 'request', app.getHandler server
