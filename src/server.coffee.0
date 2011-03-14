@@ -52,9 +52,9 @@ framing = (chunk) ->
 			@emit 'message', obj
 
 #
-# node cluster factory, takes configuration
+# node cluster factory, takes application and configuration
 #
-module.exports = (options = {}) ->
+module.exports = (app, options = {}) ->
 
 	net = require 'net'
 	fs = require 'fs'
@@ -93,7 +93,18 @@ module.exports = (options = {}) ->
 
 		# attach request handler
 		# N.B. such pervert way of defining handler is for handler factory to have reference to the server!
-		#server.on 'request', app.getHandler server
+		server.on 'request', app.getHandler server
+
+		if options.websocket
+			websocket = require('io').listen server,
+				#resource: 'ws'
+				flashPolicyServer: false
+				#transports: ['websocket', 'flashsocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling']
+				transports: ['websocket', 'xhr-polling'] #, 'htmlfile']
+				#transportOptions:
+				#	websocket:
+				#		foo: 'bar'
+			websocket.on 'connection', options.websocket
 
 		#
 		# setup signals
@@ -146,6 +157,8 @@ module.exports = (options = {}) ->
 		# relay received messages to the process handler
 		#
 		comm.on 'message', (message) -> process.emit 'message', message
+		#if app.messageHandler
+		#	comm.on 'message', app.messageHandler.bind process, (websocket?.broadcast?.bind websocket)
 
 		#
 		# master socket descriptor has arrived
@@ -176,11 +189,6 @@ module.exports = (options = {}) ->
 		# keep-alive?
 		#
 		#setInterval (() -> process.publish 'bcast', foo: 'bar'), 10000
-
-		#
-		# return server for further tuning
-		#
-		return server
 
 	####################################################################
 	#
@@ -336,6 +344,7 @@ module.exports = (options = {}) ->
 				repl = require('repl').start 'node>', stream
 				# expose master control interface
 				repl.context[k] = v for k, v of {
+					app: app
 					shutdown: () ->
 						nworkers = 0
 						process.kill process.pid, 'SIGQUIT'
@@ -427,7 +436,7 @@ module.exports = (options = {}) ->
 			process.log "EXCEPTION: #{err.stack or err.message}"
 			process.kill process.pid, 'SIGHUP'
 
-		#
-		# nothing to expose
-		#
-		return
+	#
+	# nothing to expose
+	#
+	return

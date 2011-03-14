@@ -72,9 +72,20 @@ app =
 	getContext: getContext
 
 #
+# run the application
+#
+server = simple.run config.server
+
+#
+# subscribe to intercom messages
+#
+process.on 'message', () ->
+	@log 'MESSAGE', arguments
+
+#
 # define middleware stack
 #
-app.getHandler = (server) -> simple.middleware(
+if server then server.on 'request', simple.middleware(
 
 	#simple.middleware.log()
 
@@ -148,8 +159,3 @@ app.getHandler = (server) -> simple.middleware(
 
 )
 ###
-
-#
-# run the application
-#
-simple.run app, config.server
