@@ -1,0 +1,881 @@
+#!/usr/bin/env node
+/**
+ * It should be installable from the npm database
+ * AND from github directly
+*/
+
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+//		various utils							//
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+
+var utils	= {
+	progressViewLine	: function(current, total){
+		// do nothing if the output is not a tty
+		if(!tty_color.isTty)	return;
+
+		var nbChar	= 40*(current/total);
+		process.stdout.write('\r');
+		for(var i = 0; i < nbChar; i++)
+			process.stdout.write('#');		
+	},
+	progressViewWheel	: function(current, total){
+		// do nothing if the output is not a tty
+		if(!tty_color.isTty)	return;
+
+		var percent	= current/total;
+		var chars	= ['|', '/','-', '\\'];
+		var charIdx	= Math.floor(percent/0.05) % chars.length;
+		var aChar	= chars[charIdx];
+		process.stdout.write(aChar+tty_color.cursorBackOne);
+	},
+	httpCacheEnable	: function(){
+		return process.env['NMOD_CACHE'] !== undefined;
+	},
+	httpCacheFname	: function(url){
+		var dirname	= process.env['NMOD_CACHE_DIR'] || '/tmp/nmod_cache';
+		var basename	= require('crypto').createHash('md5').update(url).digest("hex");
+		var filename	= require("path").join(dirname, basename);
+		return filename;
+	},
+	httpCacheGet	: function(url){
+		var filename	= utils.httpCacheFname(url);
+		if( !url.httpCacheEnable() )		return null;
+		if( !utils.existSync(filename) )	return null;
+		var data	= require('fs').readFileSync(filename);
+		return data;
+	},
+	httpCachePush	: function(url, data){
+		var filename	= utils.httpCacheFname(url);
+		if( !url.httpCacheEnable() )		return;
+		require('fs').writeFileSync(filename, data, "binary");
+	},
+	/**
+	 * Fetch content of a url
+	 *
+	 * @param {string} urlStr the url to fetch
+	 * @param {Function} dataCb is a function(data){} notified with received data
+	 * @param {Function} errorCb is a function(error){} notified when an error occurs
+	*/
+	fetchUrl	: function(urlStr, dataCb, errorCb){
+		dataCb	= dataCb || function(data){}
+		errorCb	= errorCb || function(error){}
+		var url		= require('url').parse(urlStr);
+		var protocol	= url.protocol.substr(0, url.protocol.length-1);
+		var data	= "";
+		var options = {
+			host	: url.hostname,
+			port	: (url.port|| {'http': 80, 'https': 443}[protocol]),
+			path	: url.pathname,
+			headers	: {}
+		};
+		// handle http proxy - from Vladimir Dronnikov dvv@github
+		if(process.env[protocol+'_proxy']||process.env.http_proxy) {
+			var proxy = require('url').parse(process.env[protocol+'_proxy']||process.env.http_proxy);
+			options.headers.host = options.host;
+			options.port = proxy.port || 80;
+			options.host = proxy.hostname;
+			options.path = urlStr;
+		}		
+		//console.log("fetching", urlStr)
+		var req	= require(protocol).request(options, function(res) {
+			var contentLength	= parseInt(res.headers["content-length"], 10)
+			//console.log('STATUS: ', res.statusCode);
+			//console.log('HEADERS: ', res.headers);
+			
+			// honor the redirect if needed
+			if( res.statusCode >= 300 && res.statusCode < 400 ){
+				utils.fetchUrl(res.headers.location, dataCb, errorCb)
+				return;
+			}
+			
+			res.setEncoding('binary');
+			res.on('data', function(chunk){
+				//console.log('BODY: ' + chunk);
+				data += chunk;
+				utils.progressViewWheel(data.length, contentLength)
+			});
+			res.on('end', function(){
+				console.log(" Done")
+				dataCb(data);
+			});
+		});
+		req.end();
+		req.on('error', errorCb);
+	},
+	
+	/**
+	 * like mkdir -p
+	 *
+	 * - FIXME it doesnt handle the depth. handle the recursive
+	*/
+	mkdir_pSync	: function(dirname, mode){
+		var fs		= require('fs');
+		var path	= require('path');
+		// normalize dirname
+		dirname	= path.resolve(process.cwd(), dirname)
+		dirname	= path.normalize(dirname).replace(/\/$/, '');
+		var names	= dirname.split('/');
+		var fullname	= "";
+		names.forEach(function(name, idx){
+			var stats	= null;
+			fullname	+= (idx != 1 ? '/' : '')+name;
+			try {
+				stats	= fs.statSync(fullname);
+			}catch(e){}
+			if( stats && stats.isDirectory() )	return;
+			fs.mkdirSync(fullname, mode);
+		})
+	},
+
+	/**
+	 * Do a rm-rf in node
+	*/
+	rm_rfSync	: function(dirName){
+		var fs		= require('fs')
+		var stats	= null;
+		try {
+			stats	= fs.lstatSync(dirName)			
+		}catch(e){
+			return;	// silently ignore if the dirName doesnt exist
+		}
+		if( !stats.isDirectory() ){
+			fs.unlinkSync(dirName);
+			return
+		}
+		fs.readdirSync(dirName).forEach(function(basename){
+			var fullpath	= require('path').join(dirName, basename);
+			utils.rm_rfSync( fullpath )
+		})
+		fs.rmdirSync(dirName);
+	},
+	
+	/**
+	 * return true if the path exist, false otherwiser
+	*/
+	existSync	: function(path){
+		try {
+			require('fs').statSync(path);
+		}catch(e){
+			return false;
+		}
+		return true;
+	},
+	
+	/**
+	*/
+	untarData	: function(data, dstDirName, successCb, failureCb){
+		successCb	= successCb || function(){};
+		failureCb	= failureCb || function(error){console.log("error", error); console.assert(false);}
+		var tmpName	= "/tmp/nmod-"+Math.floor(Math.random()*999999).toString(36)+".tgz"
+		require('fs').writeFileSync(tmpName, data, "binary")
+	
+		var cmdArgs	= ["-C", dstDirName, "-zxf", tmpName];
+		var spawn	= require('child_process').spawn("tar", cmdArgs);
+		spawn.on('exit', function(exitStatus){
+			if( exitStatus == 0 )	successCb()
+			else			failureCb(exitStatus);
+			require('fs').unlinkSync(tmpName);
+		})
+	},
+
+	/**
+	 * do node-waf to build the native extension
+	*/
+	nodeWafBuild	: function(dirName, successCb, failureCb){
+		successCb	= successCb || function(){};
+		failureCb	= failureCb || function(error){console.assert(false);}
+		var cmdline	= "(cd '"+dirName+"' && node-waf distclean configure build)" 	
+		var child	= require('child_process').exec(cmdline, function (error, stdout, stderr){
+			if (error !== null) {
+				process.stdout.write(tty_color.error("node-waf failed to build in "+dirName+"\n"));
+				process.stdout.write(stderr);
+				failureCb(error);
+			}else{
+				successCb();
+			}
+		});
+	}
+};
+
+var tty_color	= {};
+(function(exports){
+	exports.all_off		= "\033[0m";
+	exports.bold		= "\033[1m";
+	exports.faint   	= "\033[2m"
+	exports.cls		= "\033[2J\033[0;0H"
+	exports.cursorBackOne	= "\033[1D"
+	exports.cursorFrontOne	= "\033[1C"
+	exports.fg_green	= "\033[32m"
+	exports.fg_red		= "\033[31m"
+	exports.bg_green	= "\033[42m"
+	exports.bg_red		= "\033[41m"
+	exports.img_neg		= "\033[7m"
+	exports.img_pos		= "\033[27m"
+
+	var stdoutFd	= 1;
+	exports.isTty	= require('tty').isatty(stdoutFd);
+
+	exports.code	= function(str){
+		if(!exports.isTty)	return str;
+		return exports.fg_green + str + exports.all_off;
+	}
+	exports.error	= function(str){
+		if(!exports.isTty)	return str;
+		return exports.fg_red + str + exports.all_off;
+	}
+	
+})(tty_color);
+
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+//		semver parser							//
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+
+var semver	= {};
+(function(exports){
+	// from https://github.com/isaacs/node-semver
+	// See http://semver.org/
+	// This implementation is a *hair* less strict in that it allows
+	// v1.2.3 things, and also tags that don't begin with a char.
+	
+	var semver = "[v=]*([0-9]+)"                // major
+		   + "\\.([0-9]+)"                  // minor
+		   + "\\.([0-9]+)"                  // patch
+		   + "(-[0-9]+-?)?"                 // build
+		   + "([a-zA-Z-][a-zA-Z0-9-\.:]*)?" // tag
+	  , exprComparator = "^((<|>)?=?)("+semver+")$|^$"
+	  , xRange = "((?:<|>)?=?)([0-9]+|x|X)(?:\\.([0-9]+|x|X)(?:\\.([0-9]+|x|X))?)?"
+	  , exprSpermy = "(?:~>?)"+xRange
+	  , expressions = exports.expressions =
+	    { parse : new RegExp("^\\s*"+semver+"\\s*$")
+	    , parsePackage : new RegExp("^\\s*([^\/]+)[-@](" +semver+")\\s*$")
+	    , parseRange : new RegExp(
+		"^\\s*(" + semver + ")\\s+-\\s+(" + semver + ")\\s*$")
+	    , validComparator : new RegExp("^"+exprComparator+"$")
+	    , parseXRange : new RegExp("^"+xRange+"$")
+	    , parseSpermy : new RegExp("^"+exprSpermy+"$")
+	    }
+	Object.getOwnPropertyNames(expressions).forEach(function (i) {
+	  exports[i] = function (str) { return (str || "").match(expressions[i]) }
+	})
+	
+	exports.rangeReplace = ">=$1 <=$7"
+	exports.clean = clean
+	exports.compare = compare
+	exports.satisfies = satisfies
+	exports.gt = gt
+	exports.lt = lt
+	exports.valid = valid
+	exports.validPackage = validPackage
+	exports.validRange = validRange
+	exports.maxSatisfying = maxSatisfying
+	
+	function clean (ver) {
+	  v = exports.parse(ver)
+	  if (!v) return v
+	  return [v[1]||'', v[2]||'', v[3]||''].join(".") + (v[4]||'') + (v[5]||'')
+	}
+	function valid (version) {
+	  return exports.parse(version) && version.trim().replace(/^[v=]+/, '')
+	}
+	function validPackage (version) {
+	  return version.match(expressions.parsePackage) && version.trim()
+	}
+	
+	// range can be one of:
+	// "1.0.3 - 2.0.0" range, inclusive, like ">=1.0.3 <=2.0.0"
+	// ">1.0.2" like 1.0.3 - 9999.9999.9999
+	// ">=1.0.2" like 1.0.2 - 9999.9999.9999
+	// "<2.0.0" like 0.0.0 - 1.9999.9999
+	// ">1.0.2 <2.0.0" like 1.0.3 - 1.9999.9999
+	var starExpression = /(<|>)?=?\s*\*/g
+	  , starReplace = ""
+	  , compTrimExpression = new RegExp("((<|>)?=?)\\s*("+semver+")", "g")
+	  , compTrimReplace = "$1$3"
+	
+	function toComparators (range) {
+	  return (range || "").trim()
+	    .replace(expressions.parseRange, exports.rangeReplace)
+	    .split(/\s+/)
+	      .map(replaceSpermies)
+	      .map(replaceXRanges)
+	    .join(" ")
+	    .replace(compTrimExpression, compTrimReplace)
+	    .replace(starExpression, starReplace)
+	    .split("||")
+	    .map(function (orchunk) {
+	      return orchunk
+		.trim()
+		.split(/\s+/)
+		.filter(function (c) { return c.match(expressions.validComparator) })
+	    })
+	    .filter(function (c) { return c.length })
+	}
+	
+	// "2.x","2.x.x" --> ">=2.0.0 <2.1"
+	// "2.3.x" --> ">=2.3.0 <2.4.0"
+	function replaceXRanges (ranges) {
+	  return ranges.split(/\s+/)
+		       .map(replaceXRange)
+		       .join(" ")
+	}
+	function replaceXRange (version) {
+	  return version.trim().replace(expressions.parseXRange,
+					function (v, gtlt, M, m, p) {
+	    var anyX = !M || M.toLowerCase() === "x"
+		       || !m || m.toLowerCase() === "x"
+		       || !p || p.toLowerCase() === "x"
+	
+	    if (gtlt && anyX) {
+	      // just replace x'es with zeroes
+	      ;(!M || M.toLowerCase() === "x") && (M = 0)
+	      ;(!m || m.toLowerCase() === "x") && (m = 0)
+	      ;(!p || p.toLowerCase() === "x") && (p = 0)
+	      return gtlt + M+"."+m+"."+p
+	    }
+	
+	    if (!M || M.toLowerCase() === "x") {
+	      return "*" // allow any
+	    }
+	    if (!m || m.toLowerCase() === "x") {
+	      return ">="+M+".0.0 <"+(+M+1)+".0.0"
+	    }
+	    if (!p || p.toLowerCase() === "x") {
+	      return ">="+M+"."+m+".0 <"+M+"."+(+m+1)+".0"
+	    }
+	    return v // impossible?
+	  })
+	}
+	
+	// ~, ~> --> * (any, kinda silly)
+	// ~2, ~2.x, ~2.x.x, ~>2, ~>2.x ~>2.x.x --> >=2.0.0 <3.0.0
+	// ~2.0, ~2.0.x, ~>2.0, ~>2.0.x --> >=2.0.0 <2.1.0
+	// ~1.2, ~1.2.x, ~>1.2, ~>1.2.x --> >=1.2.0 <1.3.0
+	// ~1.2.3, ~>1.2.3 --> >=1.2.3 <1.3.0
+	// ~1.2.0, ~>1.2.0 --> >=1.2.0 <1.3.0
+	function replaceSpermies (version) {
+	  return version.trim().replace(expressions.parseSpermy,
+					function (v, gtlt, M, m, p) {
+	    if (gtlt) throw new Error(
+	      "Using '"+gtlt+"' with ~ makes no sense. Don't do it.")
+	    if (!M || M.toLowerCase() === "x") {
+	      return "*"
+	    }
+	    if (!m || m.toLowerCase() === "x") {
+	      return ">="+M+".0.0 <"+(+M+1)+".0.0"
+	    }
+	    if (!p || p.toLowerCase() === "x") {
+	      return ">="+M+"."+m+".0 <"+M+"."+(+m+1)+".0"
+	    }
+	    return ">="+M+"."+m+"."+p+" <"+M+"."+(+m+1)+".0"
+	  })
+	}
+	
+	function validRange (range) {
+	  range = range.trim().replace(starExpression, starReplace)
+	  var c = toComparators(range)
+	  return (c.length === 0)
+	       ? null
+	       : c.map(function (c) { return c.join(" ") }).join("||")
+	}
+	
+	// returns the highest satisfying version in the list, or undefined
+	function maxSatisfying (versions, range) {
+	  return versions
+	    .filter(function (v) { return satisfies(v, range) })
+	    .sort(compare)
+	    .pop()
+	}
+	function satisfies (version, range) {
+	  version = valid(version)
+	  if (!version) return false
+	  range = toComparators(range)
+	  for (var i = 0, l = range.length ; i < l ; i ++) {
+	    var ok = false
+	    for (var j = 0, ll = range[i].length ; j < ll ; j ++) {
+	      var r = range[i][j]
+		, gtlt = r.charAt(0) === ">" ? gt
+		       : r.charAt(0) === "<" ? lt
+		       : false
+		, eq = r.charAt(!!gtlt) === "="
+		, sub = (!!eq) + (!!gtlt)
+	      if (!gtlt) eq = true
+	      r = r.substr(sub)
+	      r = (r === "") ? r : valid(r)
+	      ok = (r === "") || (eq && r === version) || (gtlt && gtlt(version, r))
+	      if (!ok) break
+	    }
+	    if (ok) return true
+	  }
+	  return false
+	}
+	
+	// return v1 > v2 ? 1 : -1
+	function compare (v1, v2) {
+	  return v1 === v2 ? 0 : gt(v1, v2) ? 1 : -1
+	}
+	
+	function lt (v1, v2) { return gt(v2, v1) }
+	
+	// return v1 > v2
+	function num (v) {
+	  return v === undefined ? -1 : parseInt((v||"0").replace(/[^0-9]+/g, ''), 10)
+	}
+	function gt (v1, v2) {
+	  v1 = exports.parse(v1)
+	  v2 = exports.parse(v2)
+	  if (!v1 || !v2) return false
+	
+	  for (var i = 1; i < 5; i ++) {
+	    v1[i] = num(v1[i])
+	    v2[i] = num(v2[i])
+	    if (v1[i] > v2[i]) return true
+	    else if (v1[i] !== v2[i]) return false
+	  }
+	  // no tag is > than any tag, or use lexicographical order.
+	  var tag1 = v1[5] || ""
+	    , tag2 = v2[5] || ""
+	  return !!tag2 && (!tag1 || tag1 > tag2)
+	}	
+})(semver);
+
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+//		nmod itself							//
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+
+var nmod	= function(cmdline, cmdopts){
+	var ROOTDIR	= cmdopts.rootdir	|| ".";
+	var prefixStr	= cmdopts.prefixStr	|| "";
+	var successCb	= cmdopts.successCb	|| function(data){};
+	var failureCb	= cmdopts.failureCb	|| function(error){console.log("error", error); console.assert(false);}
+	
+	/**
+	 * Fetch the package.json of the package
+	*/
+	var getPackageJson	= function(pkgName, pkgVers, successCb, failureCb){
+		successCb	= successCb || function(data){};
+		failureCb	= failureCb || function(error){console.log("error", error); console.assert(false);}
+		var pkgJsonUrl	= "http://registry.npmjs.org/"+pkgName+"/"+pkgVers;
+		//console.log("pkgJsonUrl", pkgJsonUrl)
+		//console.log("fetching package.json info for", tty_color.code(pkgName+" "+pkgVers));
+		process.stdout.write(tty_color.code(prefixStr+pkgName)+": fetching package.json info for version "+pkgVers+" ...")
+		utils.fetchUrl(pkgJsonUrl, function(dataJson){
+			successCb(JSON.parse(dataJson));
+		}, function(error){
+			failureCb(error);
+		})
+	}
+	/**
+	 * Fetch the meta.json of the package
+	 *
+	 * - http://registry.npmjs.org/{packagename}
+	 * - Returns the JSON document for this package. Includes all known dists and metadata
+	*/
+	var getMetaJson	= function(pkgName, successCb, failureCb){
+		successCb	= successCb || function(data){};
+		failureCb	= failureCb || function(error){console.log("error", error); console.assert(false);}
+		var metaJsonUrl	= "http://registry.npmjs.org/"+pkgName;
+		//console.log("metaJsonUrl", metaJsonUrl)
+		process.stdout.write(tty_color.code(prefixStr+pkgName)+": fetching meta info ...")
+		utils.fetchUrl(metaJsonUrl, function(dataJson){
+			successCb(JSON.parse(dataJson));
+		}, function(error){
+			failureCb(error);
+		})
+	}
+
+	/**
+	 * find the pkgVers which match the pkgVersRange for pkgName
+	*/
+	var findMatchPkgVers	= function(pkgName, pkgVersRange, successCb, failureCb){
+		successCb	= successCb || function(pkgVers){};
+		failureCb	= failureCb || function(error){console.log("error", error); console.assert(false);}
+		getMetaJson(pkgName, function(metaJson){
+			// detect error from couchdb
+			if( 'error' in metaJson && 'reason' in metaJson ){
+				failureCb(metaJson.reason)
+				return;
+			}
+			// check all versions and pick the latest which match pkgVersRange
+			// NOTE: do not rely on metaJson['dist-tags'].latest
+			// - it isnt always valid.
+			// - var latestVers = metaJson['dist-tags'].latest;
+			var latestVers	 = null;
+			Object.keys(metaJson.versions).forEach(function(version){
+				// if this version doesnt match pkgVersRange, ignore it
+				if( !semver.satisfies(version, pkgVersRange) )	return;
+				if( !latestVers || semver.gt(version, latestVers) ){
+					latestVers	= version
+				}
+			})
+			// notify the caller				
+			if( latestVers )	successCb(latestVers);
+			else			failureCb("no version match");			
+		})
+	}
+
+
+	/**
+	 * Return the .tar url in the package.json of pkgName/pkgVers
+	*/
+	var getTarUrl	= function(pkgName, pkgVers, successCb, failureCb){
+		successCb	= successCb || function(url){};
+		failureCb	= failureCb || function(error){console.log("error", error); console.assert(false);}
+		getPackageJson(pkgName, pkgVers, function(data){
+			successCb(data.dist.tarball)
+		}, function(error){
+			failureCb(error)
+		})
+	}
+	
+	/**
+	 * fetch dependencies in the package.json of pkgName/pkgVers
+	*/
+	var getDeps	= function(pkgName, pkgVers, successCb, failureCb){
+		successCb	= successCb || function(url){};
+		failureCb	= failureCb || function(error){console.log("error", error); console.assert(false);}
+		getPackageJson(pkgName, pkgVers, function(data){
+			successCb(data.dependencies)
+		}, function(error){
+			failureCb(error)
+		})
+	}
+	
+	/**
+	 *
+	 * Used while installing from npm and from tar
+	 *
+	 * @param {String} pkgUrl the url of the package to fetch
+	 * @param {String} pkgName the name of the package (display only ?)
+	 * @param {String} pkgVers the version of the package
+	 * @param {Object} pkgJson an potentially better package.json (e.g. from npmjs.org)
+	*/
+	var installFromPkgUrl	= function(pkgUrl, pkgName, pkgVers, pkgJson){
+		utils.fetchUrl(pkgUrl, function(tarData){
+			var modDirname	= ROOTDIR+"/node_modules"
+			var tmpDirname	= modDirname+"/.tmp-"+pkgName+"-"+pkgVers;
+			var dstDirname	= modDirname+"/"+pkgName;
+			utils.rm_rfSync(tmpDirname);
+			utils.mkdir_pSync(tmpDirname, 0777);
+			
+			// display for the user
+			process.stdout.write(tty_color.code(prefixStr+pkgName)+": ");
+			process.stdout.write("install package in "+modDirname+" ... ");
+			
+			// TODO handle zip too here
+			utils.untarData(tarData, tmpDirname, function(){
+				process.stdout.write("Done\n");
+	
+				// get the root directory basename from the package
+				var basenames	= require('fs').readdirSync(tmpDirname);
+				console.assert(basenames.length === 1)
+				// console.log("moving", tmpDirname+"/"+basenames[0], dstDirname) 
+				// move the untar package from tmpDirname to dstDirname
+				// - NOTE iif dstDirname doesnt exist. not to overwrite 
+				// - e.g. npm is shipped with a node_modules already
+				if( utils.existSync(dstDirname) === false ){
+					require('fs').renameSync(tmpDirname+"/"+basenames[0], dstDirname);					
+				}
+				// remove tmpDirname
+				utils.rm_rfSync(tmpDirname);
+				// overwrite the package.json with the one from the server
+				// - not sure why it is needed, but ryp is doing it
+				// - maybe the package.json is canonized by the server... as isaacs
+				if( typeof pkgJson !== "undefined" ){
+					require('fs').writeFileSync(dstDirname+"/package.json", JSON.stringify(pkgJson), "binary")
+				}
+
+				/**
+				 * to install dependancies
+				*/
+				var installDeps	= function(){
+					nmod(["deps"], {
+						rootdir	 : dstDirname,
+						prefixStr: prefixStr,
+						successCb: function(){
+							// display for the user
+							process.stdout.write(tty_color.code(prefixStr+pkgName)+": installation completed. All is "+tty_color.code('OK')+"\n");
+							// notify the caller
+							successCb();
+						}
+					});					
+				}
+				// compile native extensions if needed
+				// - e.g. bigint or nTpl
+				if( utils.existSync(dstDirname+"/wscript") ){
+					// display for the user
+					process.stdout.write(tty_color.code(prefixStr+pkgName)+": Building native code (node-waf)\n")
+					utils.nodeWafBuild(dstDirname, function(){
+						// display for the user
+						process.stdout.write(tty_color.code(prefixStr+pkgName)+": native code built\n");
+						installDeps();
+					}, function(){
+						installDeps();
+					})
+				}else{
+					// install the dependancies 
+					installDeps();
+				}
+			})
+		})		
+	}
+
+
+	//////////////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////////////
+	//									//
+	//////////////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////////////
+
+
+	/**
+	 * List all installed packages in the ROOTDIR
+	 *
+	 * - NOTE: this command is sync
+	*/
+	var doCmdLs	= function(){
+		var fs		= require('fs');
+		var dirname	= ROOTDIR+"/node_modules";
+		var basenames	= [];
+		try {
+			var basenames	= fs.readdirSync(dirname).sort();			
+		}catch(e){}
+		basenames.forEach(function(basename){
+			var fullpath	= dirname+"/"+basename;
+			// display this one
+			console.log(fullpath);
+			// reccurse if needed
+			try {
+				if( fs.statSync(fullpath).isDirectory() ){
+					nmod(["ls"], { rootdir	: fullpath });
+				}				
+			}catch(e){}
+		})
+	}
+
+	/**
+	 * Uninstall a package
+	 *
+	 * - note: no version here. as a given pkgName can have a single instance
+	 *   in a given node_modules directory
+	 * - NOTE: this command is sync
+	*/
+	var doCmdRm	= function(pkgName){
+		var dirname	= ROOTDIR+"/node_modules/"+pkgName;
+		// display for the user
+		process.stdout.write(tty_color.code(prefixStr+pkgName)+": ");
+		process.stdout.write("remove package and deps from "+ROOTDIR+"/node_modules ... ");
+		utils.rm_rfSync(dirname)
+		process.stdout.write("Done\n")
+	}
+
+
+	var doCmdInstallNpm	= function(pkgName, pkgVersRange){
+		// log to debug
+		//console.log("pkgName", pkgName, "pkgVersRange", pkgVersRange)
+		
+		// display for the user
+		process.stdout.write(tty_color.code(prefixStr+pkgName)+": ");
+		process.stdout.write(pkgVersRange === ">= 0.0.0"? "latest version": ("version "+pkgVersRange));
+		process.stdout.write(" to be installed in "+(ROOTDIR+"/node_modules")+"\n")
+
+		findMatchPkgVers(pkgName, pkgVersRange, function(pkgVers){
+			getPackageJson(pkgName, pkgVers, function(pkgJson){
+				var pkgUrl	= pkgJson.dist.tarball;
+				// display for the user
+				process.stdout.write(tty_color.code(prefixStr+pkgName)+": ");
+				process.stdout.write("fetch .tar data for version "+pkgVers+" ...");
+				// 
+				installFromPkgUrl(pkgUrl, pkgName, pkgVers, pkgJson);
+			});
+		}, function(error){
+			process.stdout.write(tty_color.code(prefixStr+pkgName)+": ");
+			process.stdout.write(pkgVersRange === ">= 0.0.0"? "latest version": ("version "+pkgVersRange));
+			if(error === "document not found"){
+				process.stdout.write(tty_color.error(" cant be found")+"! ensure the package version exists\n");				
+			}else{
+				process.stdout.write(" installation "+tty_color.error("failed!")+" due to "+tty_color.error(error)+"\n");					
+			}
+			process.exit(-1);
+		});
+	}
+	
+	/**
+	*/
+	var doCmdInstallUrl	= function(pkgUrl){
+		// NOTE: super specific to github tar url
+		// - https://github.com/visionmedia/express/zipball/1.0.7
+		var urlPathname	= require('url').parse(pkgUrl).pathname;
+		var matches	= urlPathname.match(/\/([^/]*)\/([^/]*)\/([^/]*)\/([^/]*)/);
+		var pkgName	= matches[2];
+		var pkgVers	= matches[4];
+
+		// display for the user
+		process.stdout.write(tty_color.code(prefixStr+pkgName)+": ");
+		process.stdout.write("fetch .tar data for version "+pkgVers+" ...");
+		
+		installFromPkgUrl(pkgUrl, pkgName, pkgVers);
+	}
+
+	/**
+	 * Install a package
+	 *
+	 * @param {String} pkgName is a npm package name or a url
+	 * @param {String} pkgVersRange semver version (valid IIF pkgName is a npm package)
+	*/
+	var doCmdInstall	= function(pkgName, pkgVersRange){
+		// TODO what if already installed
+		// - currently this is silently overwritten...
+
+		// call the proper installer depending
+		var pkgNameIsUrl	= ['http:', 'https:'].indexOf(require('url').parse(pkgName).protocol) != -1;
+		if( pkgNameIsUrl ){
+			doCmdInstallUrl(pkgName)
+		}else{
+			doCmdInstallNpm(pkgName, pkgVersRange)			
+		}
+	}
+
+	/**
+	 * Install dependencies from package.json file.
+	*/
+	var doCmdDeps	= function(){
+		var pkgName	= require('path').basename(ROOTDIR);
+		var filename	= ROOTDIR+"/package.json";
+		// display for the user
+		process.stdout.write(tty_color.code(prefixStr+pkgName)+": installing dependancies in "+(ROOTDIR+"/node_modules")+"\n")
+		// read package.json
+		try {
+			var pkgJsonData	= require('fs').readFileSync(filename);			
+		}catch(e){
+			process.stdout.write(tty_color.code(prefixStr+pkgName)+": skipped : no ./package.json\n")
+			successCb();
+			return;
+		}
+		var pkgJson	= JSON.parse(pkgJsonData);
+		var deps	= pkgJson.dependencies	|| {};
+		var depNames	= Object.keys(deps);
+		if( depNames.length == 0 ){
+			process.stdout.write(tty_color.code(prefixStr+pkgName)+": no dependancies in ./package.json\n")
+			successCb();
+			return;
+		}
+		
+		// reccursive function to install dependencies sequentially
+		var installDep	= function(depName){
+			var depVersRange	= pkgJson.dependencies[depName];
+			//console.log("pkgName", pkgName, "pkgVers", pkgVersRange)
+			//console.log("Install dependancy "+pkgName+"("+pkgVersRange+") in "+ROOTDIR)
+			process.stdout.write(tty_color.code(prefixStr+pkgName)+": installing dependancy "+tty_color.code(depName+"("+depVersRange+")")+" in "+(ROOTDIR+"/node_modules")+"\n")
+			// install the dependancies 
+			nmod(["install", depName, depVersRange], {
+				rootdir		: ROOTDIR,
+				prefixStr	: (prefixStr.length ? prefixStr : '') + pkgName + " > ",				
+				successCb	: function(){
+					if( depNames.length ){
+						// install the next dependency
+						installDep( depNames.shift() )
+					}else{
+						successCb();
+					}
+				}
+			});			
+		}
+		// launch the install of the first dependancy
+		installDep( depNames.shift() )
+	}
+
+
+	var parseCmdline	= function(argv){
+		// define aliases
+		var aliases	= {
+			list		: "ls",
+			remove		: "rm",
+			uninstall	: "rm"
+		}
+		// honor aliases
+		if( aliases[argv[0]] )	argv[0]	= aliases[argv[0]];
+		// handle each command
+		if( argv[0] == "ls"){
+			return doCmdLs();
+		}else if( argv[0] == "install" ){
+			console.assert( argv.length == 2 || argv.length == 3);
+			return doCmdInstall(argv[1], argv[2] || ">= 0.0.0");
+		}else if( argv[0] == "deps" ){
+			console.assert( argv.length == 1 );
+			return doCmdDeps();
+		}else if( argv[0] == "rm" ){
+			console.assert( argv.length == 2 )
+			return doCmdRm(argv[1]);
+		}else if( argv.length == 0 || argv[0] == "help"){
+			console.log("nmod: install node_modules from npm or git")
+			console.log("nmod install <package> - Install a package, and nest its deps.");
+			console.log("nmod ls                - Show installed packages.");
+			console.log("nmod rm <package>      - Remove a package");
+			console.log("nmod deps              - Install dependencies from package.json file");
+		}else{
+			console.log("Command "+argv[0]+" is unknown")
+		}
+		return undefined;
+	}
+	
+	// init the function
+	parseCmdline(cmdline)
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+//		main program							//
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * exports nmod thus is is a module itself
+*/
+exports.create	= function(cmdline, cmdopts){
+	return new nmod(cmdline, cmdopts);
+}
+
+/**
+ * Handle the execution if run as cmdline
+*/
+var main	= function(){
+	//nmod(["ls"], {	rootdir	: "/tmp/slota" })
+	//nmod(["install", "underscore"], {	rootdir	: "/tmp/bla" })
+	//nmod(["deps"], {	rootdir	: "/tmp/slota/node_modules/connect" })
+	
+	//utils.rm_rfSync("/tmp/bla/node_modules")
+	//nmod(["install", "qs", ">= 0.0.6"], {	rootdir	: "/tmp/bla" })
+	//nmod(["install", "express"], {	rootdir	: "/tmp/bla" })
+	
+	//utils.mkdir_pSync("/tmp/slota/wow", 0777)
+	//utils.rm_rfSync("/tmp/bla/node_modules")
+	
+	// honor NMOD_ROOT if needed, else default to ./
+	var ROOTDIR	= process.env["NMOD_ROOT"]	|| '.';
+	
+	nmod(process.argv.slice(2), {
+		rootdir		: ROOTDIR,
+		successCb	: function(){
+		},
+		failureCb	: function(error){					
+		}				
+	})
+}
+
+if (module === require.main) {
+	main();
+}

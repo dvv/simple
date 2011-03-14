@@ -1,35 +1,11 @@
 'use strict'
 
 ###
-
-     Vladimir Dronnikov 2011 dronnikov@gmail.com
-
-     Redistribution and use in source and binary forms, with or without
-     modification, are permitted provided that the following conditions are
-     met:
-
-     * Redistributions of source code must retain the above copyright
-       notice, this list of conditions and the following disclaimer.
-     * Redistributions in binary form must reproduce the above
-       copyright notice, this list of conditions and the following disclaimer
-       in the documentation and/or other materials provided with the
-       distribution.
-     * Neither the name of the  nor the names of its
-       contributors may be used to endorse or promote products derived from
-       this software without specific prior written permission.
-
-     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-     A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-     OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-     SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-     LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-     DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-     THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-     (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
+ *
+ * Stereo multi-node helper
+ * Copyright(c) 2011 Vladimir Dronnikov <dronnikov@gmail.com>
+ * MIT Licensed
+ *
 ###
 
 #
@@ -51,9 +27,47 @@ framing = (chunk) ->
 			buf = ''
 			@emit 'message', obj
 
-#
-# node cluster factory, takes configuration
-#
+###
+
+	node cluster factory, takes options:
+
+options.host				- host to bind server to	= *
+options.port				- port to bind server to	= 80
+options.connections	- listener capacity				= 1024
+
+	worker process options
+
+options.uid
+options.gid
+options.pwd
+options.args
+options.env
+
+	workers configuration
+
+options.workers				- number of workers to start			= # of CPU cores
+options.workerShutdownTimeout
+options.ipc						- UNIX domain socket path for IPC		= '.ipc'
+
+	files modification watchdog
+
+options.watch					- array of paths to watch for				= undefined
+options.watchInterval	- interval to watch for changes, ms	= 500
+
+	REPL
+
+options.repl	- start REPL
+	true -- REPL on stdin
+	<number> -- REPL on localhost:<number>
+	<string> -- REPL on UNIX socket <string>
+
+	HTTPS credentials paths
+
+options.ssl.key
+options.ssl.cert
+options.ssl.caCerts
+
+###
 module.exports = (options = {}) ->
 
 	net = require 'net'
@@ -82,18 +96,17 @@ module.exports = (options = {}) ->
 		#
 		# setup HTTP(S) server
 		#
-		if options.sslKey
+		if options.ssl
 			credentials =
-				key: fs.readFileSync options.sslKey, 'utf8'
-				cert: fs.readFileSync options.sslCert, 'utf8'
-				#ca: options.sslCACerts.map (fname) -> fs.readFileSync fname, 'utf8'
+				key: fs.readFileSync options.ssl.key, 'utf8'
+				cert: fs.readFileSync options.ssl.cert, 'utf8'
+				#ca: options.ssl.caCerts.map (fname) -> fs.readFileSync fname, 'utf8'
 			server = require('https').createServer credentials
 		else
 			server = require('http').createServer()
-
-		# attach request handler
-		# N.B. such pervert way of defining handler is for handler factory to have reference to the server!
-		#server.on 'request', app.getHandler server
+		#
+		# N.B. request handler to be attached elsewhere
+		#
 
 		#
 		# setup signals
@@ -101,7 +114,7 @@ module.exports = (options = {}) ->
 		#
 		# graceful shutdown, if timeout specified
 		#
-		if options.shutdownTimeout
+		if options.workerShutdownTimeout
 			process.on 'SIGQUIT', () ->
 				@log 'shutting down...'
 				if server.connections
@@ -110,7 +123,7 @@ module.exports = (options = {}) ->
 					# check pending connections
 					setInterval (-> server.connections or process.exit 0), 2000
 					# timeout
-					setTimeout (-> process.exit 0), options.shutdownTimeout
+					setTimeout (-> process.exit 0), options.workerShutdownTimeout
 				else
 					@exit 0
 		#
@@ -143,7 +156,7 @@ module.exports = (options = {}) ->
 		comm.on 'data', framing.bind comm
 
 		#
-		# relay received messages to the process handler
+		# relay received messages to the process 'message' handler
 		#
 		comm.on 'message', (message) -> process.emit 'message', message
 
@@ -221,7 +234,7 @@ module.exports = (options = {}) ->
 		# setup IPC
 		#
 		workers = {} # array of workers
-		args = options.argv or process.argv # allow to override workers arguments
+		args = options.args or process.argv # allow to override workers arguments
 		# copy environment
 		env = {}
 		env[k] = v for own k, v of process.env
@@ -428,6 +441,6 @@ module.exports = (options = {}) ->
 			process.kill process.pid, 'SIGHUP'
 
 		#
-		# nothing to expose
+		# return undefined for master
 		#
 		return
