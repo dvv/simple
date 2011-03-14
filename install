@@ -7,6 +7,7 @@
 deps='
 dvv/underscore/underscore.js:underscore.js
 creationix/simple-mime/simple-mime.js:simple-mime.js
+felixge/node-formidable:formidable
 LearnBoost/Socket.IO-node:socket.io
 samshull/node-proxy:node-proxy
 flotype/now:now
@@ -52,9 +53,9 @@ for dep in $deps; do
 		mkdir -p git/${git}
 		$WGET http://nodeload.github.com/${author}/${git}/tarball/master -O- | tar -xzf- --strip 1 -C git/${git}
 		cd git/${git}
-		if test -f Makefile; then
-			make
-		fi
+		#if test -f Makefile; then
+		#	make
+		#fi
 		if test -f wscript; then
 			node-waf distclean configure build
 		fi
@@ -76,6 +77,7 @@ for dep in $deps; do
 		test -e "$lib/$link" || ln -s "../git/$path" "$lib/$link"
 	fi
 
+	if false; then
 		cd git/${git}
 		# deps via package.json
 		if test -f package.json; then
@@ -91,6 +93,7 @@ for dep in $deps; do
 			done
 		fi
 		cd ../..
+	fi
 
 done
 

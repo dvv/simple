@@ -35,51 +35,13 @@
 #
 # decode request body
 #
-module.exports.body = (options = {}) ->
-
-	formidable = require 'formidable'
-
-	handler = (req, res, next) ->
-
-		if req.method is 'POST' or req.method is 'PUT'
-			console.log 'DESER'
-			req.params = {} # N.B. drop any parameter got from querystring
-			# deserialize
-			form = new formidable.IncomingForm()
-			form.uploadDir = options.uploadDir or 'upload'
-			form.on 'file', (field, file) ->
-				form.emit 'field', field, file
-			form.on 'field', (field, value) ->
-				console.log 'FIELD', field, value
-				if not req.params[field]
-					req.params[field] = value
-				else if not Array.isArray req.params[field]
-					req.params[field] = [req.params[field], value]
-				else
-					req.params[field].push value
-			form.on 'error', (err) ->
-				console.log 'TYPE?', err
-				next SyntaxError(err.message or err)
-			form.on 'end', () ->
-				console.log 'END'
-				# Backbone.emulateJSON compat:
-				# if 'application/x-www-form-urlencoded[; foobar]' --> reparse 'model' key to be the final params
-				if req.headers['content-type'].split(';')[0] is 'application/x-www-form-urlencoded'
-					delete req.params._method
-					#console.log 'BACKBONE?', req.params
-					req.params = JSON.parse(req.params.model or '{}')
-				next()
-			form.parse req
-		else
-			next()
-
-#
-# decode request JSON body
-#
 # N.B. to be reliable must be the first in middleware
 # consider using pause/resume helpers from express otherwise
 #
-module.exports.jsonBody = (options = {}) ->
+module.exports.decodeBody = (options = {}) ->
+
+	formidable = require 'formidable'
+	uploadDir = options.uploadDir or 'upload'
 
 	(req, res, next) ->
 
@@ -90,25 +52,72 @@ module.exports.jsonBody = (options = {}) ->
 		res.req = req
 		res.headers ?= {}
 
-		# N.B. content-type: application/json is required
-		if (req.method is 'POST' or req.method is 'PUT') and req.headers['content-type'].split(';')[0] is 'application/json'
-			req.params = {}
-			body = ''
-			req.on 'data', (chunk) ->
-				body += chunk.toString 'utf8'
-				# fuser not to exhaust memory
-				if body.length > options.maxLength > 0
-					req.params = 'Length exceeded'
+		# null user
+		req.context = user: {}
+
+		# content-type: application/json
+		if req.method in ['POST', 'PUT']
+			type = req.headers['content-type'].split(';')[0]
+			if type is 'application/json'
+				req.setEncoding 'utf8'
+				req.params = {}
+				body = ''
+				req.on 'data', (chunk) ->
+					body += chunk
+					# fuser not to exhaust memory
+					if body.length > options.maxLength > 0
+						next SyntaxError 'Length exceeded'
+				req.on 'error', (err) ->
+					next err
+				req.on 'end', () ->
+					try
+						req.params = JSON.parse body
+					catch err
+						next SyntaxError 'Bad JSON'
 					next()
-			req.on 'end', () ->
-				try
-					# TODO: use kriszyp's more forgiving one?
-					req.params = JSON.parse body
-				catch err
-					req.params = err.message
-				next()
+			else #if type is 'application/x-www-form-urlencoded'
+				req.params = {}
+				# deserialize
+				form = new formidable.IncomingForm()
+				form.uploadDir = uploadDir
+				form.maxFieldsSize = options.maxLength if options.maxLength
+				form.on 'file', (field, file) ->
+					form.emit 'field', field, file
+				form.on 'field', (field, value) ->
+					#console.log 'FIELD', field, value
+					if not req.params[field]
+						req.params[field] = value
+					else if not Array.isArray req.params[field]
+						req.params[field] = [req.params[field], value]
+					else
+						req.params[field].push value
+				form.on 'error', (err) ->
+					next SyntaxError(err.message or err)
+				form.on 'end', () ->
+					#console.log 'END', req.params
+					# Backbone.emulateJSON compat:
+					# if 'application/x-www-form-urlencoded[; foobar]' --> reparse 'model' key to be the final params
+					#if req.headers['content-type'].split(';')[0] is 'application/x-www-form-urlencoded'
+					#	delete req.params._method
+					#	#console.log 'BACKBONE?', req.params
+					#	req.params = JSON.parse(req.params.model or '{}')
+					next()
+				#try
+				form.parse req
+				#catch err
+				#	next TypeError(err.message or err)
+			#else
+			#	next()
 		else
 			next()
+
+#
+# simply dump req.params
+#
+module.exports.dumpParams = (options = {}) ->
+
+	handler = (req, res, next) ->
+		res.send req.params
 
 #
 # log request and response code
@@ -133,55 +142,47 @@ module.exports.authCookie = (options = {}) ->
 	cookie = options.cookie or 'uid'
 	getContext = options.getContext
 
-	if getContext
+	# helper to set/clear secured cookie
+	require('http').ServerResponse::setSession = (session) ->
+		cookieOptions = path: '/'
+		if session and typeof session is 'object'
+			# set the cookie
+			cookieOptions.expires = session.expires if session.expires
+			@req.cookie.set cookie, session.uid, cookieOptions
+			undefined
+		else
+			# clear the cookie
+			@req.cookie.clear cookie, cookieOptions
+			session
 
-		# helper to set/clear secured cookie
-		require('http').ServerResponse::setSession = (session) ->
-			cookieOptions = path: '/'
-			if session and typeof session is 'object'
-				# set the cookie
-				cookieOptions.expires = session.expires if session.expires
-				@req.cookie.set cookie, session.uid, cookieOptions
-				undefined
-			else
-				# clear the cookie
-				@req.cookie.clear cookie, cookieOptions
-				session
+	#
+	# contexts cache
+	# TODO: how to reset?
+	#
+	cache = {}
 
-		#
-		# contexts cache
-		# TODO: how to reset?
-		#
-		cache = {}
-
-		#
-		# handler
-		#
-		(req, res, next) ->
-			req.cookie = new Cookie req, res, options.secret
-			# get the user ID
-			# N.B. we use '' for all falsy uids
-			uid = req.cookie.get(cookie) or ''
-			#console.log "UID #{uid}"
-			# attach context of that user to the request
-			if cache.hasOwnProperty uid
-				req.context = cache[uid]
-				next()
-			else
-				getContext uid, (err, context) ->
-					# N.B. any error in getting user just means no user
-					cache[uid] = req.context = context or user: {}
-					#console.log "USER", req.context
-					# freeze the context
-					Object.freeze context
-					next()
-			return
-	else
-		(req, res, next) ->
-			# null user
-			req.context = user: {}
+	#
+	# handler
+	#
+	(req, res, next) ->
+		req.cookie = new Cookie req, res, options.secret
+		# get the user ID
+		# N.B. we use '' for all falsy uids
+		uid = req.cookie.get(cookie) or ''
+		#console.log "UID #{uid}"
+		# attach context of that user to the request
+		if cache.hasOwnProperty uid
+			req.context = cache[uid]
 			next()
-			return
+		else
+			getContext uid, (err, context) ->
+				# N.B. any error in getting user just means no user
+				cache[uid] = req.context = context or user: {}
+				#console.log "USER", req.context
+				# freeze the context
+				#Object.freeze context
+				next()
+		return
 
 #
 # perform basic www authentication
@@ -356,17 +357,11 @@ module.exports.rest = (options = {}) ->
 					args.push step
 					console.log 'CALLING', args, fn.length
 					# handler arguments count must coincide with args length
-					return step 406 if args.length isnt fn.length
+					return step SyntaxError 'Invalid method signature' if args.length isnt fn.length
 					fn.apply null, args
 				else
-					# no handler in context
-					# check login call
-					if data.method is 'login' and @verify
-						@verify data.params, (err, session) -> step res.setSession err or session
-					else
-						# no handler here
-						console.log 'NOTFOUND', data
-						next()
+					# no handler in the context
+					next()
 			(err, result) ->
 				#console.log 'RESULT', arguments
 				#

@@ -60,7 +60,7 @@ http.IncomingMessage::parse = () ->
 
 	# honor X-HTTP-Method-Override
 	if @headers['x-http-method-override']
-		@method = @headers['x-http-method-override'].toUpperCase()
+		@method = @headers['x-http-method-override']
 
 	# sanitize headers and method
 	headers = @headers

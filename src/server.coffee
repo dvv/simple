@@ -52,7 +52,7 @@ framing = (chunk) ->
 			@emit 'message', obj
 
 #
-# node cluster factory, takes request handler and configuration
+# node cluster factory, takes application and configuration
 #
 module.exports = (app, options = {}) ->
 

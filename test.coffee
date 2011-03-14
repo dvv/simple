@@ -57,7 +57,13 @@ TESTSTR12000 = s+s
 #
 # define capability object for given user uid
 #
-getContext = (uid, next) -> next null, user: {}
+getContext = (uid, callback) ->
+	context =
+		user: {}
+		login: (data, cb) ->
+			console.log 'LOGIN'
+			cb()
+	callback null, context
 
 #
 # define application
@@ -72,10 +78,27 @@ app.getHandler = (server) -> simple.middleware(
 
 	#simple.middleware.log()
 
-	simple.middleware.jsonBody
+	simple.middleware.decodeBody
 		maxLength: 0 # set to >0 to limit the number of bytes
 		# TODO: mime plugins
 
+	simple.middleware.authCookie
+		cookie: 'uid'
+		secret: config.security.secret
+		getContext: getContext
+
+	simple.middleware.dumpParams()
+
+	simple.middleware.mount 'POST', '/login', (req, res, next) ->
+		return next 'FUCKINGSHIT!'
+		session =
+			uid: req.params.user
+		process.log 'SESSION', session
+		next res.setSession session
+
+)
+
+###
 	simple.middleware.mount 'GET', '/foo0', (req, res, next) ->
 		res.send 'GOT FROM FOO0'
 
@@ -124,6 +147,7 @@ app.getHandler = (server) -> simple.middleware(
 		res.send TESTSTR12000
 
 )
+###
 
 #
 # run the application
