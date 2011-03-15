@@ -1,5 +1,14 @@
-#
-# Vladimir Dronnikov 2011 dronnikov@gmail.com
+'use strict'
+
+###
+ *
+ * Secure signed cookies
+ * Copyright(c) 2011 Vladimir Dronnikov <dronnikov@gmail.com>
+ * MIT Licensed
+ *
+###
+
+###
 #
 # ideas from
 #
@@ -7,6 +16,7 @@
 # https://github.com/jed/cookies.git
 # https://github.com/caolan/cookie-sessions.git
 #
+###
 
 crypto = require 'crypto'
 _ = require 'underscore'
@@ -20,14 +30,14 @@ memoize = (func) ->
 		memo[key]
 ###
 
-# regexp helper to extract a named cookie
+### regexp helper to extract a named cookie ###
 getCookiePattern = _.memoize (name) ->
 	new RegExp('(?:^|;) *' + name.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&') + '=([^;]*)')
 
 class Cookie
 
 	constructor: (@req, @res, @secret) ->
-		# by default cookies expire in 15 days
+		### by default cookies expire in 15 days ###
 		@expires = -15*24*60*60*1000
 
 	encrypt: (str) ->
@@ -55,15 +65,16 @@ class Cookie
 	set: (name, value, options = {}) ->
 		cookie = name + '='
 		if value?
-			# options.expires suffer usual Date hell
+			### options.expires suffer usual Date hell ###
 			expires = options.expires or @expires
+			### negative number means milliseconds from current moment ###
 			if _.isNumber expires
 				if expires < 0
 					expires = Date.now() - expires
 				expires = new Date expires
 			else unless _.isDate expires
 				expires = _.parseDate expires
-			# encrypt and sign the cookie value
+			### encrypt and sign the cookie value ###
 			data = @encrypt value
 			timestamp = +expires
 			cookie += @sign(timestamp + data) + timestamp + data
@@ -94,7 +105,7 @@ class Cookie
 			if @sign(str.substring(40)) is str.substr(0, 40) and +str.substring(40, 53) > Date.now()
 				@decrypt str.substring(53)
 			else
-				# N.B. we explicitly clear expired cookies
+				### N.B. we explicitly clear expired cookies ###
 				@clear name
 				undefined
 

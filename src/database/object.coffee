@@ -1,59 +1,29 @@
 'use strict'
 
 ###
-
-     Vladimir Dronnikov 2011 dronnikov@gmail.com
-
-     Redistribution and use in source and binary forms, with or without
-     modification, are permitted provided that the following conditions are
-     met:
-     
-     * Redistributions of source code must retain the above copyright
-       notice, this list of conditions and the following disclaimer.
-     * Redistributions in binary form must reproduce the above
-       copyright notice, this list of conditions and the following disclaimer
-       in the documentation and/or other materials provided with the
-       distribution.
-     * Neither the name of the  nor the names of its
-       contributors may be used to endorse or promote products derived from
-       this software without specific prior written permission.
-     
-     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-     A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-     OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-     SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-     LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-     DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-     THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-     (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
+ *
+ * Simple Object helpers
+ * Copyright(c) 2011 Vladimir Dronnikov <dronnikov@gmail.com>
+ * MIT Licensed
+ *
 ###
 
-# TODO: as a separate lib
+### TODO: as a separate lib? ###
 
 _.mixin
 
-	#
-	# naive check if `value` is an object
-	#
+	# naive check if `value` is an object #
 	isObject: (value) ->
 		value and typeof value is 'object'
 
-	#
 	# ensure passed `value` is an array
 	# make the array of the single item `value` otherwise
-	#
 	ensureArray: (value) ->
 		return (if value is undefined then [] else [value]) unless value
 		return [value] if _.isString value
 		_.toArray value
 
-	#
 	# converts a `list` of objects to hash keyed by `field` in objects
-	#
 	toHash: (list, field) ->
 		r = {}
 		_.each list, (x) ->
@@ -61,9 +31,7 @@ _.mixin
 			r[f] = x
 		r
 
-	#
 	# deep freeze an object
-	#
 	freeze: (obj) ->
 		if _.isObject obj
 			Object.freeze obj
@@ -88,7 +56,6 @@ _.mixin
 			else
 				name = definition
 				prop = obj[name]
-			#
 			facet[name] = prop if prop
 		Object.freeze facet
 
@@ -129,9 +96,7 @@ _.mixin
 				obj[path]
 
 _.mixin
-	#
 	# until every engine supports ECMA5, safe coercing to Date is evil
-	#
 	parseDate: (value) ->
 		date = new Date value
 		return date if _.isDate date

@@ -1,35 +1,11 @@
 'use strict'
 
 ###
-
-     Vladimir Dronnikov 2011 dronnikov@gmail.com
-
-     Redistribution and use in source and binary forms, with or without
-     modification, are permitted provided that the following conditions are
-     met:
-
-     * Redistributions of source code must retain the above copyright
-       notice, this list of conditions and the following disclaimer.
-     * Redistributions in binary form must reproduce the above
-       copyright notice, this list of conditions and the following disclaimer
-       in the documentation and/or other materials provided with the
-       distribution.
-     * Neither the name of the  nor the names of its
-       contributors may be used to endorse or promote products derived from
-       this software without specific prior written permission.
-
-     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-     "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-     LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-     A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-     OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-     SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-     LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-     DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-     THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-     (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
+ *
+ * Simple middleware handlers
+ * Copyright(c) 2011 Vladimir Dronnikov <dronnikov@gmail.com>
+ * MIT Licensed
+ *
 ###
 
 #
@@ -73,7 +49,7 @@ module.exports.decodeBody = (options = {}) ->
 					try
 						req.params = JSON.parse body
 					catch err
-						next SyntaxError 'Bad JSON'
+						return next SyntaxError 'Bad JSON'
 					next()
 			else #if type is 'application/x-www-form-urlencoded'
 				req.params = {}
@@ -84,6 +60,7 @@ module.exports.decodeBody = (options = {}) ->
 				form.on 'file', (field, file) ->
 					form.emit 'field', field, file
 				form.on 'field', (field, value) ->
+					# FIXME: someday they promised to put it in master
 					#console.log 'FIELD', field, value
 					if not req.params[field]
 						req.params[field] = value
@@ -102,10 +79,7 @@ module.exports.decodeBody = (options = {}) ->
 					#	#console.log 'BACKBONE?', req.params
 					#	req.params = JSON.parse(req.params.model or '{}')
 					next()
-				#try
 				form.parse req
-				#catch err
-				#	next TypeError(err.message or err)
 			#else
 			#	next()
 		else
@@ -117,7 +91,9 @@ module.exports.decodeBody = (options = {}) ->
 module.exports.dumpParams = (options = {}) ->
 
 	handler = (req, res, next) ->
-		res.send req.params
+		console.log req.params
+		next()
+		#res.send req.params
 
 #
 # log request and response code
@@ -134,7 +110,7 @@ module.exports.log = (options = {}) ->
 		next()
 
 #
-# fetch secret cookie defining the user, lookup in db
+# fetch session cookie, setup session context
 #
 module.exports.authCookie = (options = {}) ->
 
@@ -157,7 +133,6 @@ module.exports.authCookie = (options = {}) ->
 
 	#
 	# contexts cache
-	# TODO: how to reset?
 	#
 	cache = {}
 
@@ -177,11 +152,9 @@ module.exports.authCookie = (options = {}) ->
 		else
 			getContext uid, (err, context) ->
 				# N.B. any error in getting user just means no user
-				cache[uid] = req.context = context or user: {}
-				#console.log "USER", req.context
-				# freeze the context
-				#Object.freeze context
-				next()
+				if context
+					cache[uid] = req.context = context
+				next err
 		return
 
 #
@@ -190,55 +163,43 @@ module.exports.authCookie = (options = {}) ->
 module.exports.authBasic = (options = {}) ->
 
 	getContext = options.getContext
+	realm = options.realm or 'simple'
 
-	if getContext
+	# helpers
+	unauthorized = (res) ->
+		res.setHeader 'WWW-Authenticate', "Basic realm=\"#{realm}\""
+		res.send 401
+		return
 
-		realm = options.realm or 'simple'
+	#
+	# contexts cache
+	#
+	cache = {}
 
-		# helpers
-		unauthorized = (res) ->
-			res.setHeader 'WWW-Authenticate', "Basic realm=\"#{realm}\""
-			res.send 401
-			return
-
-		#
-		# contexts cache
-		# TODO: how to reset?
-		#
-		cache = {}
-
-		#
-		# handler
-		#
-		(req, res, next) ->
-			auth = req.headers.authorization
-			return unauthorized res unless auth
-			[scheme, credentials] = auth.split ' '
-			return res.send 400 unless scheme is 'Basic'
-			[uid, pass] = new Buffer(credentials, 'base64').toString('utf8').split ':'
-			console.log "UID #{uid} PASS #{pass}"
-			# attach context of that user to the request
-			if cache.hasOwnProperty uid
-				req.context = cache[uid]
-				next()
-			else
-				getContext {uid: uid, pass: pass}, (err, context) ->
-					# N.B. any error in getting user just means no user
-					cache[uid] = req.context = context or user: {}
-					#console.log "USER", req.context
-					# freeze the context
-					Object.freeze context
-					next()
-			return
-	else
-		(req, res, next) ->
-			# null user
-			req.context = user: {}
+	#
+	# handler
+	#
+	(req, res, next) ->
+		auth = req.headers.authorization
+		return unauthorized res unless auth
+		[scheme, credentials] = auth.split ' '
+		return res.send 400 unless scheme is 'Basic'
+		[uid, pass] = new Buffer(credentials, 'base64').toString('utf8').split ':'
+		console.log "UID #{uid} PASS #{pass}"
+		# attach context of that user to the request
+		if cache.hasOwnProperty uid
+			req.context = cache[uid]
 			next()
-			return
+		else
+			getContext {uid: uid, pass: pass}, (err, context) ->
+				# N.B. any error in getting user just means no user
+				if context
+					cache[uid] = req.context = context
+				next err
+		return
 
 #
-# bind a handler to a location, and optionally HTTP verb
+# bind a handler to a location, and, optionally, to an HTTP verb
 #
 module.exports.mount = (method, path, handler) ->
 
@@ -321,7 +282,7 @@ module.exports.rest = (options = {}) ->
 	(req, res, next) ->
 
 		data = req.params
-		Next req.context or {},
+		Next req.context,
 			(err, dummy, step) ->
 				# pass parse errors to response
 				return step data if typeof data is 'string'
@@ -338,6 +299,7 @@ module.exports.rest = (options = {}) ->
 				#
 				unless data.jsonrpc and data.hasOwnProperty('method') and data.hasOwnProperty('params')
 					data = convertToRPC req.method, req.location.pathname, query, data
+					data.jsonrpc = '2.0'
 				console.log 'CALL', data, req.context
 				#return res.send data
 				#
@@ -347,12 +309,12 @@ module.exports.rest = (options = {}) ->
 				if Array.isArray data.method
 					fn = fn and fn[i] for i in data.method
 				else
-					fn = fn[data.method]
+					fn = fn and fn[data.method]
 				#
 				# do RPC call
 				#
 				if fn
-					args = if Array.isArray data.params then data.params else if data.params then [data.params] else []
+					args = if Array.isArray data.params then data.params.slice() else if data.params then [data.params] else []
 					args.unshift context
 					args.push step
 					console.log 'CALLING', args, fn.length

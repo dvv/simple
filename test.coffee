@@ -74,88 +74,89 @@ app =
 #
 # run the application
 #
-server = simple.run config.server
+if server = require('stereo') null, config.server
 
-#
-# subscribe to intercom messages
-#
-process.on 'message', () ->
-	@log 'MESSAGE', arguments
+	#
+	# worker process
+	#
 
-#
-# define middleware stack
-#
-if server then server.on 'request', simple.middleware(
+	#
+	# subscribe to intercom messages
+	#
+	process.on 'message', () ->
+		@log 'MESSAGE', arguments
 
-	#simple.middleware.log()
+	#
+	# define middleware stack
+	#
+	server.on 'request', simple.middleware(
 
-	simple.middleware.decodeBody
-		maxLength: 0 # set to >0 to limit the number of bytes
-		# TODO: mime plugins
+		#simple.middleware.log()
 
-	simple.middleware.authCookie
-		cookie: 'uid'
-		secret: config.security.secret
-		getContext: getContext
+		simple.middleware.decodeBody
+			maxLength: 0 # set to >0 to limit the number of bytes
+			# TODO: mime plugins
 
-	simple.middleware.dumpParams()
+		#simple.middleware.dumpParams()
 
-	simple.middleware.mount 'POST', '/login', (req, res, next) ->
-		return next 'FUCKINGSHIT!'
-		session =
-			uid: req.params.user
-		process.log 'SESSION', session
-		next res.setSession session
+		simple.middleware.mount 'GET', '/foo0', (req, res, next) ->
+			res.send 'GOT FROM FOO0'
 
-)
+		simple.middleware.authCookie
+			cookie: 'uid'
+			secret: config.security.secret
+			getContext: getContext
+		#simple.middleware.authBasic
+		#	getContext: getContext
+		#	#realm: 'simple'
 
-###
-	simple.middleware.mount 'GET', '/foo0', (req, res, next) ->
-		res.send 'GOT FROM FOO0'
+		simple.middleware.mount 'POST', '/login', (req, res, next) ->
+			return next 'FUCKINGSHIT!'
+			session =
+				uid: req.params.user
+			process.log 'SESSION', session
+			next res.setSession session
 
-	# TODO: unite
-	# TODO: /login handler
-	simple.middleware.authCookie
-		cookie: 'uid'
-		secret: config.security.secret
-		getContext: getContext
-	#simple.middleware.authBasic
-	#	getContext: getContext
-	#	#realm: 'simple'
+		simple.middleware.mount 'GET', '/foo1', (req, res, next) ->
+			res.send 'GOT FROM FOO1'
 
-	simple.middleware.mount 'GET', '/foo1', (req, res, next) ->
-		res.send 'GOT FROM FOO1'
+		#simple.middleware.rest
+		#	parseQuery: _.rql
 
-	#simple.middleware.rest
-	#	parseQuery: _.rql
+		simple.middleware.mount 'GET', '/foo2', (req, res, next) ->
+			res.send 'GOT FROM FOO2'
 
-	simple.middleware.mount 'GET', '/foo2', (req, res, next) ->
-		res.send 'GOT FROM FOO2'
+		simple.middleware.dynamic
+			map:
+				'/': 'test/index.html'
 
-	simple.middleware.dynamic
-		map:
-			'/': 'test/index.html'
+		simple.middleware.mount 'GET', '/foo3', (req, res, next) ->
+			res.send 'GOT FROM FOO3'
 
-	simple.middleware.mount 'GET', '/foo2', (req, res, next) ->
-		res.send 'GOT FROM FOO3'
+		#simple.middleware.static '/', config.server.pub.dir, 'index.html',
+		#	#cacheMaxFileSizeToCache: 1024 # set to limit the size of cacheable file
+		#	cacheTTL: 1000
 
-	#simple.middleware.static '/', config.server.pub.dir, 'index.html',
-	#	#cacheMaxFileSizeToCache: 1024 # set to limit the size of cacheable file
-	#	cacheTTL: 1000
+		simple.middleware.static0
+			root: config.server.pub.dir
+			default: 'index.html'
+			#cacheMaxFileSizeToCache: 1024 # set to limit the size of cacheable file
+			cacheTTL: 1000
 
-	simple.middleware.static0
-		root: config.server.pub.dir
-		default: 'index.html'
-		#cacheMaxFileSizeToCache: 1024 # set to limit the size of cacheable file
-		cacheTTL: 1000
+		simple.middleware.mount 'GET', '/foo4', (req, res, next) ->
+			res.send 'GOT FROM FOO4'
 
-	simple.middleware.mount 'GET', '/foo4', (req, res, next) ->
-		res.send 'GOT FROM FOO4'
+		simple.middleware.mount 'GET', '/6000', (req, res, next) ->
+			res.send TESTSTR6000
+		simple.middleware.mount 'GET', '/12000', (req, res, next) ->
+			res.send TESTSTR12000
 
-	simple.middleware.mount 'GET', '/6000', (req, res, next) ->
-		res.send TESTSTR6000
-	simple.middleware.mount 'GET', '/12000', (req, res, next) ->
-		res.send TESTSTR12000
+	)
 
-)
-###
+else
+
+	#
+	# master process
+	#
+
+	setTimeout (-> process.publish ping: 'pong'), 2000

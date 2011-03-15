@@ -1,3 +1,5 @@
+'use static'
+
 ###
 taken from dvv/stack.static
 ###

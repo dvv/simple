@@ -1,3 +1,5 @@
+'use static'
+
 Path = require 'path'
 Url = require 'url'
 Fs = require 'fs'
